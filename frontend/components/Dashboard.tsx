@@ -9,6 +9,9 @@ import {
   getSortedRowModel,
   getFilteredRowModel,
   flexRender,
+  ColumnFiltersState,
+  VisibilityState,
+  getPaginationRowModel,
 } from "@tanstack/react-table";
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { request, gql } from 'graphql-request';
@@ -16,7 +19,19 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button"; 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetClose } from "@/components/ui/sheet";
-import { ArrowUpDown } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ArrowUpDown, Trash2 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 const graphqlEndpoint = process.env.NEXT_PUBLIC_GRAPHQL_ENDPOINT!;
 
@@ -150,6 +165,28 @@ const ActionMenu = ({ user }: { user: User }) => {
 
 export const columns: ColumnDef<User>[] = [
   {
+    id: "select",
+    header: ({ table }) => (
+      <Checkbox
+        checked={
+          table.getIsAllPageRowsSelected() ||
+          (table.getIsSomePageRowsSelected() && "indeterminate")
+        }
+        onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+        aria-label="Select all"
+      />
+    ),
+    cell: ({ row }) => (
+      <Checkbox
+        checked={row.getIsSelected()}
+        onCheckedChange={(value) => row.toggleSelected(!!value)}
+        aria-label="Select row"
+      />
+    ),
+    enableSorting: false,
+    enableHiding: false,
+  },
+  {
     accessorKey: "name",
     header: ({ column }) => (
       <Button
@@ -173,7 +210,10 @@ export const columns: ColumnDef<User>[] = [
 
 export function Dashboard() {
   const [sorting, setSorting] = useState<SortingState>([]);
-  
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
+  const [rowSelection, setRowSelection] = useState({});
+
   const { data, isLoading, error } = useQuery({
     queryKey: ['users'],
     queryFn: async () => {
@@ -200,11 +240,35 @@ export function Dashboard() {
     data: data || [],
     columns,
     getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
-    state: { sorting },
     onSortingChange: setSorting,
+    onColumnFiltersChange: setColumnFilters,
+    onColumnVisibilityChange: setColumnVisibility,
+    onRowSelectionChange: setRowSelection,
+    state: {
+      sorting,
+      columnFilters,
+      columnVisibility,
+      rowSelection,
+    },
+    initialState: {
+      pagination: {
+        pageSize: 15,
+      },
+    },
   });
+
+  const selectedUsers = table.getFilteredSelectedRowModel().rows.map(
+    (row) => row.original.name
+  );
+
+  const handleDelete = () => {
+    const selectedRows = table.getFilteredSelectedRowModel().rows;
+    console.log('Selected rows to delete:', selectedRows);
+    // Implement your delete logic here
+  };
 
   if (isLoading) return <p>Loading...</p>;
   if (error) return <p>Error: {(error as Error).message}</p>;
@@ -212,6 +276,53 @@ export function Dashboard() {
 
   return (
     <div className="w-full p-2 md:p-4 space-y-4 max-w-[1400px] mx-auto">
+      <div className="flex justify-between items-center">
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button
+              variant="destructive"
+              size="sm"
+              className="flex items-center gap-2"
+              disabled={table.getFilteredSelectedRowModel().rows.length === 0}
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete Selected
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            </AlertDialogHeader>
+            <div className="text-sm text-muted-foreground">
+              This action cannot be undone. This will permanently delete the following users:
+              <ul className="mt-2 list-disc list-inside space-y-1">
+                {selectedUsers.map((name, index) => (
+                  <li key={index} className="text-sm font-medium">
+                    {name}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDelete}
+                className="bg-destructive hover:bg-destructive/90"
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+        
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">
+            {table.getFilteredSelectedRowModel().rows.length} of{" "}
+            {table.getFilteredRowModel().rows.length} row(s) selected.
+          </span>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 md:gap-4">
         <Input
           placeholder="Filter by name..."
@@ -255,6 +366,31 @@ export function Dashboard() {
               ))}
             </TableBody>
           </Table>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-end space-x-2 py-4">
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => table.previousPage()}
+            disabled={!table.getCanPreviousPage()}
+          >
+            Previous
+          </Button>
+          <div className="text-sm text-muted-foreground">
+            Page {table.getState().pagination.pageIndex + 1} of{" "}
+            {table.getPageCount()}
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => table.nextPage()}
+            disabled={!table.getCanNextPage()}
+          >
+            Next
+          </Button>
         </div>
       </div>
     </div>
