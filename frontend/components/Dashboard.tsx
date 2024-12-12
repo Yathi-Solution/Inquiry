@@ -359,10 +359,10 @@ export function Dashboard() {
             return 100;
           }
           // Slow down progress as it gets higher
-          const increment = Math.max(1, (90 - prev) / 10);
+          const increment = Math.max(2, (90 - prev));
           return Math.min(90, prev + increment);
         });
-      }, 50);
+      }, 30);
 
       return () => clearInterval(timer);
     } else {
