@@ -1,11 +1,14 @@
 import { ApolloClient, InMemoryCache, HttpLink } from '@apollo/client';
-// import { setContext } from '@apollo/client/link/context';
+import { loadErrorMessages, loadDevMessages } from "@apollo/client/dev";
+import { __DEV__ } from '@apollo/client/utilities/globals';
+// Import types from queries file
+import { User, UpdateUserInput, FilterUserInput } from '@/graphql/queries';
 
 
 // HTTP connection to the GraphQL API
 const httpLink = new HttpLink({
-  uri: process.env.NEXT_PUBLIC_GRAPHQL_ENDPOINT, // Replace with your GraphQL endpoint
-  credentials: 'same-origin', // Include credentials for same-origin requests
+  uri: process.env.NEXT_PUBLIC_GRAPHQL_ENDPOINT, // Ensure this is set correctly
+  credentials: 'same-origin',
 });
 
 // Apollo Client instance
@@ -14,24 +17,10 @@ const client = new ApolloClient({
   cache: new InMemoryCache(),
 });
 
+if (__DEV__) {
+  // Adds messages only in a dev environment
+  loadDevMessages();
+  loadErrorMessages();
+}
+
 export default client;
-
-
-// Middleware to add authorization headers (if required)
-// const authLink = setContext((_, { headers }) => {
-//   const token = process.env.NEXT_PUBLIC_AUTH_TOKEN; 
-//   return {
-//     headers: {
-//       ...headers,
-//       authorization: token ? `Bearer ${token}` : '',
-//     },
-//   };
-// });
-
-// Apollo Client instance
-// const client = new ApolloClient({
-//   link: authLink.concat(httpLink),
-//   cache: new InMemoryCache(),
-// });
-
-// export default client;
