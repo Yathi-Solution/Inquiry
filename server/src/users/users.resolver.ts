@@ -8,49 +8,49 @@ import { GetUsersByNameInput } from './dto/filter-name.dto';
 
 @Resolver(() => User)
 export class UsersResolver {
-  constructor(private readonly UsersService: UsersService) {}
+  constructor(private readonly usersService: UsersService) {}
 
   // Get all users
   @Query(() => [User], { name: 'users' })
   async getAllUsers() {
-    return this.UsersService.getAllUsers();
+    return this.usersService.getAllUsers();
   }
 
   // Get a single user by ID
   @Query(() => User, { name: 'user' })
   async getUserById(@Args('id') id: number) {
-    return this.UsersService.getUserById(id);
+    return this.usersService.getUserById(id);
   }
 
   // Create a new user
   @Mutation(() => User)
   async createUser(@Args('createUserInput') createUserInput: CreateUserInput) {
-    return this.UsersService.createUser(createUserInput);
+    return this.usersService.createUser(createUserInput);
   }
 
   // Update a user
   @Mutation(() => User)
   async updateUser(@Args('updateUserInput') updateUserInput: UpdateUserInput) {
-    return this.UsersService.updateUser(updateUserInput);
+    return this.usersService.updateUser(updateUserInput);
   }
 
   // Delete a user
   @Mutation(() => Boolean)
   async deleteUser(@Args('id') id: number) {
-    return this.UsersService.deleteUser(id);
+    return this.usersService.deleteUser(id);
   }
 
-  @Query(() => [User], { name: 'users' })
+  @Query(() => [User], { name: 'usersByLocationAndRole' })
   async getUsersByLocationAndRole(
-    @Args('filter', { nullable: true }) filter?: FilterUserInput,  // Accept the filter argument
+    @Args('filter', { nullable: true }) filter?: FilterUserInput,
   ) {
-    return this.UsersService.getUsersByLocationAndRole(filter);  // Pass the filter to the service
-  }  
+    return this.usersService.getUsersByLocationAndRole(filter);
+  }
 
   @Query(() => [User]) // This will return an array of User objects
   async getUsersByName(
     @Args('filter', { nullable: true }) filter?: GetUsersByNameInput, // Filter input is optional
   ) {
-    return this.UsersService.getUsersByName(filter); // Delegate the query logic to the UsersService
+    return this.usersService.getUsersByName(filter); // Delegate the query logic to the UsersService
   }
 }

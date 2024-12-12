@@ -64,19 +64,18 @@ export class UsersService {
   }
 
   async getUsersByLocationAndRole(filter?: FilterUserInput) {
-    
-    const whereConditions = [];
+    const whereConditions: Prisma.UserWhereInput = {};
 
     if (filter?.location_id) {
-      whereConditions.push({ location_id: filter.location_id });
+      whereConditions.location_id = filter.location_id;
     }
 
     if (filter?.role_id) {
-      whereConditions.push({ role_id: filter.role_id });
+      whereConditions.role_id = filter.role_id;
     }
 
     return this.prisma.user.findMany({
-      where: whereConditions.length ? { AND: whereConditions } : {},
+      where: whereConditions,
       include: {
         role: true,
         location: true,

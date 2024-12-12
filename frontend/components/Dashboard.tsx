@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useCallback } from "react";
 import {
   ColumnDef,
   SortingState,
@@ -32,6 +32,15 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { GET_FILTERED_USERS, GET_ALL_USERS } from "@/graphql/queries";
+import debounce from "lodash/debounce";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const graphqlEndpoint = process.env.NEXT_PUBLIC_GRAPHQL_ENDPOINT!;
 
@@ -200,7 +209,14 @@ export const columns: ColumnDef<User>[] = [
     ),
   },
   { accessorKey: "email", header: "Email" },
-  { accessorKey: "role_id", header: "Role ID" },
+  {
+    accessorKey: "role_id",
+    header: "Role",
+    cell: ({ row }) => {
+      const roleId = row.getValue("role_id") as string;
+      return <div>{roleId}</div>;
+    }
+  },
   { accessorKey: "location_id", header: "Location ID" },
   {
     id: "actions",
@@ -213,27 +229,67 @@ export function Dashboard() {
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = useState({});
+  const [filter, setFilter] = useState<{ role_id?: string; location_id?: string }>({});
+
+  const debouncedRoleFilter = useCallback(
+    debounce((value: string) => {
+      setFilter(prev => ({ 
+        ...prev, 
+        role_id: value === 'all' ? undefined : value 
+      }));
+    }, 300),
+    []
+  );
+
+  const debouncedLocationFilter = useCallback(
+    debounce((value: string) => {
+      setFilter(prev => ({ ...prev, location_id: value }));
+    }, 500),
+    []
+  );
+
+  const handleRoleFilter = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    e.target.value = value;
+    debouncedRoleFilter(value);
+  };
+
+  const handleLocationFilter = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    e.target.value = value;
+    debouncedLocationFilter(value);
+  };
+
+  const resetFilters = () => {
+    setFilter({});
+    table.getColumn("name")?.setFilterValue('');
+    table.getColumn("location_id")?.setFilterValue('');
+  };
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['users'],
+    queryKey: ['users', filter],
     queryFn: async () => {
+      if (!filter.role_id && !filter.location_id) {
+        const response = await request(
+          graphqlEndpoint,
+          GET_ALL_USERS
+        ) as { users: User[] };
+        return response.users;
+      }
+      
       const response = await request(
         graphqlEndpoint,
-        gql`
-          query GetAllUsers {
-            users {
-              user_id
-              name
-              email
-              role_id
-              location_id
-            }
+        GET_FILTERED_USERS,
+        {
+          filter: {
+            role_id: filter.role_id ? parseInt(filter.role_id) : undefined,
+            location_id: filter.location_id ? parseInt(filter.location_id) : undefined
           }
-        `
-      );
-      const typedResponse = response as { users: User[] };
-      return typedResponse.users;
-    }
+        }
+      ) as { usersByLocationAndRole: User[] };
+      return response.usersByLocationAndRole;
+    },
+    staleTime: 1000,
   });
 
   const table = useReactTable({
@@ -270,9 +326,42 @@ export function Dashboard() {
     // Implement your delete logic here
   };
 
-  if (isLoading) return <p>Loading...</p>;
-  if (error) return <p>Error: {(error as Error).message}</p>;
-  if (!data?.length) return <p>No users found</p>;
+  const roleOptions = [
+    { value: 'all', label: 'All Roles' },
+    { value: '1', label: 'Super-Admin' },
+    { value: '2', label: 'Salesperson' },
+    { value: '3', label: 'Location-Manager' },
+  ];
+
+  const handleRoleChange = (value: string) => {
+    debouncedRoleFilter(value);
+  };
+
+  const getRoleName = (roleId: string | undefined) => {
+    if (!roleId) return '';
+    const role = roleOptions.find(role => role.value === roleId);
+    return role ? role.label : '';
+  };
+
+  if (isLoading) {
+    return (
+      <div className="w-full h-screen flex items-center justify-center">
+        <div className="text-center">
+          <p>Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="w-full h-screen flex items-center justify-center">
+        <div className="text-center text-red-500">
+          <p>Error: {(error as Error).message}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full p-2 md:p-4 space-y-4 max-w-[1400px] mx-auto">
@@ -321,6 +410,9 @@ export function Dashboard() {
             {table.getFilteredRowModel().rows.length} row(s) selected.
           </span>
         </div>
+        <Button onClick={resetFilters} variant="outline" size="sm">
+          Reset Filters
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 md:gap-4">
@@ -329,45 +421,63 @@ export function Dashboard() {
           onChange={(e) => table.getColumn("name")?.setFilterValue(e.target.value)}
           className="min-w-[200px]"
         />
-        <Input
-          placeholder="Filter by role ID..."
-          onChange={(e) => table.getColumn("role_id")?.setFilterValue(e.target.value)}
-          className="min-w-[200px]"
-        />
+        <Select
+          value={filter.role_id || 'all'}
+          onValueChange={handleRoleChange}
+          disabled={isLoading}
+        >
+          <SelectTrigger className="min-w-[200px]">
+            <SelectValue placeholder="Filter by role" />
+          </SelectTrigger>
+          <SelectContent>
+            {roleOptions.map((role) => (
+              <SelectItem key={role.value} value={role.value}>
+                {role.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <Input
           placeholder="Filter by location ID..."
-          onChange={(e) => table.getColumn("location_id")?.setFilterValue(e.target.value)}
+          onChange={handleLocationFilter}
           className="min-w-[200px]"
+          disabled={isLoading}
         />
       </div>
-      <div className="overflow-auto border rounded-md bg-white shadow-sm">
-        <div className="min-w-[600px]">
-          <Table>
-            <TableHeader>
-              {table.getHeaderGroups().map((headerGroup) => (
-                <TableRow key={headerGroup.id}>
-                  {headerGroup.headers.map((header) => (
-                    <TableHead key={header.id} className="whitespace-nowrap">
-                      {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
-                    </TableHead>
-                  ))}
-                </TableRow>
-              ))}
-            </TableHeader>
-            <TableBody>
-              {table.getRowModel().rows.map((row) => (
-                <TableRow key={row.id}>
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id} className="whitespace-nowrap">
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+      {isLoading ? (
+        <div className="w-full text-center py-4">
+          Loading...
         </div>
-      </div>
+      ) : (
+        <div className="overflow-auto border rounded-md bg-white shadow-sm">
+          <div className="min-w-[600px]">
+            <Table>
+              <TableHeader>
+                {table.getHeaderGroups().map((headerGroup) => (
+                  <TableRow key={headerGroup.id}>
+                    {headerGroup.headers.map((header) => (
+                      <TableHead key={header.id} className="whitespace-nowrap">
+                        {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+                      </TableHead>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableHeader>
+              <TableBody>
+                {table.getRowModel().rows.map((row) => (
+                  <TableRow key={row.id}>
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell key={cell.id} className="whitespace-nowrap">
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+      )}
 
       <div className="flex items-center justify-end space-x-2 py-4">
         <div className="flex items-center gap-2">

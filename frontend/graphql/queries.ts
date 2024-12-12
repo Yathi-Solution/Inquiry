@@ -49,7 +49,7 @@ export const GET_USERS_BY_NAME = gql`
 
 export const GET_FILTERED_USERS = gql`
   query GetFilteredUsers($filter: FilterUserInput) {
-    users(filter: $filter) {
+    usersByLocationAndRole(filter: $filter) {
       user_id
       name
       email
