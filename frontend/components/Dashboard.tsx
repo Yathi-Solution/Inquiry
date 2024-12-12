@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, useContext, useEffect } from "react";
 import {
   ColumnDef,
   SortingState,
@@ -41,6 +41,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Progress } from "@/components/ui/progress";
 
 const graphqlEndpoint = process.env.NEXT_PUBLIC_GRAPHQL_ENDPOINT!;
 
@@ -172,6 +173,15 @@ const ActionMenu = ({ user }: { user: User }) => {
   );
 };
 
+const roleOptions = [
+  { value: 'all', label: 'All Roles' },
+  { value: '1', label: 'Super-Admin' },
+  { value: '2', label: 'Salesperson' },
+  { value: '3', label: 'Location-Manager' },
+];
+
+const RoleContext = React.createContext<{ roleOptions: typeof roleOptions }>({ roleOptions });
+
 export const columns: ColumnDef<User>[] = [
   {
     id: "select",
@@ -213,9 +223,15 @@ export const columns: ColumnDef<User>[] = [
     accessorKey: "role_id",
     header: "Role",
     cell: ({ row }) => {
-      const roleId = row.getValue("role_id") as string;
-      return <div>{roleId}</div>;
-    }
+      const roleId = row.getValue("role_id") as number;
+      const { roleOptions } = useContext(RoleContext);
+      const roleName = roleOptions?.find(role => role.value === String(roleId))?.label;
+      return <div>{roleName || 'No Role'}</div>;
+    },
+    filterFn: (row, columnId, filterValue) => {
+      const roleId = row.getValue(columnId) as number;
+      return String(roleId) === filterValue;
+    },
   },
   { accessorKey: "location_id", header: "Location ID" },
   {
@@ -230,6 +246,7 @@ export function Dashboard() {
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = useState({});
   const [filter, setFilter] = useState<{ role_id?: string; location_id?: string }>({});
+  const [progress, setProgress] = useState(0);
 
   const debouncedRoleFilter = useCallback(
     debounce((value: string) => {
@@ -266,31 +283,21 @@ export function Dashboard() {
     table.getColumn("location_id")?.setFilterValue('');
   };
 
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['users', filter],
+  const { data, isLoading, error, isFetching } = useQuery({
+    queryKey: ['users'],
     queryFn: async () => {
-      if (!filter.role_id && !filter.location_id) {
-        const response = await request(
-          graphqlEndpoint,
-          GET_ALL_USERS
-        ) as { users: User[] };
-        return response.users;
-      }
-      
       const response = await request(
         graphqlEndpoint,
-        GET_FILTERED_USERS,
-        {
-          filter: {
-            role_id: filter.role_id ? parseInt(filter.role_id) : undefined,
-            location_id: filter.location_id ? parseInt(filter.location_id) : undefined
-          }
-        }
-      ) as { usersByLocationAndRole: User[] };
-      return response.usersByLocationAndRole;
+        GET_ALL_USERS
+      ) as { users: User[] };
+      return response.users;
     },
-    staleTime: 1000,
+    staleTime: 5000,
   });
+
+  const handleRoleChange = (value: string) => {
+    table.getColumn("role_id")?.setFilterValue(value === 'all' ? '' : value);
+  };
 
   const table = useReactTable({
     data: data || [],
@@ -309,6 +316,12 @@ export function Dashboard() {
       columnVisibility,
       rowSelection,
     },
+    filterFns: {
+      roleFilter: (row, id, value) => {
+        if (!value || value === 'all') return true;
+        return String(row.getValue(id)) === value;
+      },
+    },
     initialState: {
       pagination: {
         pageSize: 15,
@@ -326,29 +339,46 @@ export function Dashboard() {
     // Implement your delete logic here
   };
 
-  const roleOptions = [
-    { value: 'all', label: 'All Roles' },
-    { value: '1', label: 'Super-Admin' },
-    { value: '2', label: 'Salesperson' },
-    { value: '3', label: 'Location-Manager' },
-  ];
-
-  const handleRoleChange = (value: string) => {
-    debouncedRoleFilter(value);
-  };
-
   const getRoleName = (roleId: string | undefined) => {
     if (!roleId) return '';
     const role = roleOptions.find(role => role.value === roleId);
     return role ? role.label : '';
   };
 
-  if (isLoading) {
+  useEffect(() => {
+    if (isLoading || isFetching) {
+      // Reset progress when loading starts
+      setProgress(0);
+      
+      // Faster initial progress up to 90%
+      const timer = setInterval(() => {
+        setProgress(prev => {
+          if (!isLoading && prev >= 90) {
+            clearInterval(timer);
+            // Jump to 100% when data is ready
+            return 100;
+          }
+          // Slow down progress as it gets higher
+          const increment = Math.max(1, (90 - prev) / 10);
+          return Math.min(90, prev + increment);
+        });
+      }, 50);
+
+      return () => clearInterval(timer);
+    } else {
+      // When loading is complete, quickly reach 100%
+      setProgress(100);
+    }
+  }, [isLoading, isFetching]);
+
+  // Show loading state with progress
+  if (isLoading || isFetching || progress < 100) {
     return (
-      <div className="w-full h-screen flex items-center justify-center">
-        <div className="text-center">
-          <p>Loading...</p>
-        </div>
+      <div className="w-full h-screen flex flex-col items-center justify-center gap-4">
+        <Progress value={progress} className="w-[60%] max-w-[400px]" />
+        <p className="text-sm text-muted-foreground">
+          {progress < 90 ? "Loading users..." : "Almost ready..."}
+        </p>
       </div>
     );
   }
@@ -364,145 +394,145 @@ export function Dashboard() {
   }
 
   return (
-    <div className="w-full p-2 md:p-4 space-y-4 max-w-[1400px] mx-auto">
-      <div className="flex justify-between items-center">
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button
-              variant="destructive"
-              size="sm"
-              className="flex items-center gap-2"
-              disabled={table.getFilteredSelectedRowModel().rows.length === 0}
-            >
-              <Trash2 className="h-4 w-4" />
-              Delete Selected
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-            </AlertDialogHeader>
-            <div className="text-sm text-muted-foreground">
-              This action cannot be undone. This will permanently delete the following users:
-              <ul className="mt-2 list-disc list-inside space-y-1">
-                {selectedUsers.map((name, index) => (
-                  <li key={index} className="text-sm font-medium">
-                    {name}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={handleDelete}
-                className="bg-destructive hover:bg-destructive/90"
+    <RoleContext.Provider value={{ roleOptions }}>
+      <div className="w-full p-2 md:p-4 space-y-4 max-w-[1400px] mx-auto">
+        <div className="flex justify-between items-center">
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="destructive"
+                size="sm"
+                className="flex items-center gap-2"
+                disabled={table.getFilteredSelectedRowModel().rows.length === 0}
               >
-                Delete
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-        
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">
-            {table.getFilteredSelectedRowModel().rows.length} of{" "}
-            {table.getFilteredRowModel().rows.length} row(s) selected.
-          </span>
-        </div>
-        <Button onClick={resetFilters} variant="outline" size="sm">
-          Reset Filters
-        </Button>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 md:gap-4">
-        <Input
-          placeholder="Filter by name..."
-          onChange={(e) => table.getColumn("name")?.setFilterValue(e.target.value)}
-          className="min-w-[200px]"
-        />
-        <Select
-          value={filter.role_id || 'all'}
-          onValueChange={handleRoleChange}
-          disabled={isLoading}
-        >
-          <SelectTrigger className="min-w-[200px]">
-            <SelectValue placeholder="Filter by role" />
-          </SelectTrigger>
-          <SelectContent>
-            {roleOptions.map((role) => (
-              <SelectItem key={role.value} value={role.value}>
-                {role.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Input
-          placeholder="Filter by location ID..."
-          onChange={handleLocationFilter}
-          className="min-w-[200px]"
-          disabled={isLoading}
-        />
-      </div>
-      {isLoading ? (
-        <div className="w-full text-center py-4">
-          Loading...
-        </div>
-      ) : (
-        <div className="overflow-auto border rounded-md bg-white shadow-sm">
-          <div className="min-w-[600px]">
-            <Table>
-              <TableHeader>
-                {table.getHeaderGroups().map((headerGroup) => (
-                  <TableRow key={headerGroup.id}>
-                    {headerGroup.headers.map((header) => (
-                      <TableHead key={header.id} className="whitespace-nowrap">
-                        {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
-                      </TableHead>
-                    ))}
-                  </TableRow>
-                ))}
-              </TableHeader>
-              <TableBody>
-                {table.getRowModel().rows.map((row) => (
-                  <TableRow key={row.id}>
-                    {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id} className="whitespace-nowrap">
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                <Trash2 className="h-4 w-4" />
+                Delete Selected
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+              </AlertDialogHeader>
+              <div className="text-sm text-muted-foreground">
+                This action cannot be undone. This will permanently delete the following users:
+                <ul className="mt-2 list-disc list-inside space-y-1">
+                  {selectedUsers.map((name, index) => (
+                    <li key={index} className="text-sm font-medium">
+                      {name}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleDelete}
+                  className="bg-destructive hover:bg-destructive/90"
+                >
+                  Delete
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+          
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">
+              {table.getFilteredSelectedRowModel().rows.length} of{" "}
+              {table.getFilteredRowModel().rows.length} row(s) selected.
+            </span>
           </div>
-        </div>
-      )}
-
-      <div className="flex items-center justify-end space-x-2 py-4">
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
-          >
-            Previous
-          </Button>
-          <div className="text-sm text-muted-foreground">
-            Page {table.getState().pagination.pageIndex + 1} of{" "}
-            {table.getPageCount()}
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
-          >
-            Next
+          <Button onClick={resetFilters} variant="outline" size="sm">
+            Reset Filters
           </Button>
         </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 md:gap-4">
+          <Input
+            placeholder="Filter by name..."
+            onChange={(e) => table.getColumn("name")?.setFilterValue(e.target.value)}
+            className="min-w-[200px]"
+          />
+          <Select
+            value={table.getColumn("role_id")?.getFilterValue() as string || 'all'}
+            onValueChange={handleRoleChange}
+          >
+            <SelectTrigger className="min-w-[200px]">
+              <SelectValue placeholder="Filter by role" />
+            </SelectTrigger>
+            <SelectContent>
+              {roleOptions.map((role) => (
+                <SelectItem key={role.value} value={role.value}>
+                  {role.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Input
+            placeholder="Filter by location ID..."
+            onChange={handleLocationFilter}
+            className="min-w-[200px]"
+          />
+        </div>
+        {isLoading ? (
+          <div className="w-full text-center py-4">
+            Loading...
+          </div>
+        ) : (
+          <div className="overflow-auto border rounded-md bg-white shadow-sm">
+            <div className="min-w-[600px]">
+              <Table>
+                <TableHeader>
+                  {table.getHeaderGroups().map((headerGroup) => (
+                    <TableRow key={headerGroup.id}>
+                      {headerGroup.headers.map((header) => (
+                        <TableHead key={header.id} className="whitespace-nowrap">
+                          {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+                        </TableHead>
+                      ))}
+                    </TableRow>
+                  ))}
+                </TableHeader>
+                <TableBody>
+                  {table.getRowModel().rows.map((row) => (
+                    <TableRow key={row.id}>
+                      {row.getVisibleCells().map((cell) => (
+                        <TableCell key={cell.id} className="whitespace-nowrap">
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+        )}
+
+        <div className="flex items-center justify-end space-x-2 py-4">
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => table.previousPage()}
+              disabled={!table.getCanPreviousPage()}
+            >
+              Previous
+            </Button>
+            <div className="text-sm text-muted-foreground">
+              Page {table.getState().pagination.pageIndex + 1} of{" "}
+              {table.getPageCount()}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => table.nextPage()}
+              disabled={!table.getCanNextPage()}
+            >
+              Next
+            </Button>
+          </div>
+        </div>
       </div>
-    </div>
+    </RoleContext.Provider>
   );
 }
