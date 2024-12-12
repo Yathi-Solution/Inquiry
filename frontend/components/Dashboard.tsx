@@ -278,11 +278,22 @@ export function Dashboard() {
     debouncedLocationFilter(value);
   };
 
-  const resetFilters = () => {
-    setFilter({});
+  const resetFilters = useCallback(() => {
+    // Reset column filters
+    table.resetColumnFilters();
+    // Reset sorting
+    table.resetSorting();
+    // Reset row selection
+    table.resetRowSelection();
+    // Reset role filter to 'all'
+    table.getColumn("role_id")?.setFilterValue('');
+    // Reset name filter
     table.getColumn("name")?.setFilterValue('');
+    // Reset location filter
     table.getColumn("location_id")?.setFilterValue('');
-  };
+    // Reset any other state if needed
+    setFilter({}); // Reset the filter state
+  }, []); // Remove table dependency since it causes circular reference
 
   const { data, isLoading, error, isFetching } = useQuery({
     queryKey: ['users'],
@@ -461,10 +472,15 @@ export function Dashboard() {
               {table.getFilteredSelectedRowModel().rows.length} of{" "}
               {table.getFilteredRowModel().rows.length} row(s) selected.
             </span>
+            <Button 
+              onClick={resetFilters} 
+              variant="outline" 
+              size="sm"
+              className="ml-2"
+            >
+              Reset Filters
+            </Button>
           </div>
-          <Button onClick={resetFilters} variant="outline" size="sm">
-            Reset Filters
-          </Button>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 md:gap-4">
