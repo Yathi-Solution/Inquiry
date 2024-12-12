@@ -78,3 +78,9 @@ export const DELETE_USER = gql`
     }
   }
 `;
+
+export const DELETE_USERS = gql`
+  mutation DeleteUsers($userIds: [Int!]!) {
+    deleteUsers(userIds: $userIds)
+  }
+`;

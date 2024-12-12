@@ -102,4 +102,15 @@ export class UsersService {
         : undefined,
     });
   }
+
+  async deleteUsers(userIds: number[]): Promise<number[]> {
+    const deletedUsers = await this.prisma.user.deleteMany({
+      where: {
+        user_id: {
+          in: userIds
+        }
+      }
+    });
+    return userIds;
+  }
 }

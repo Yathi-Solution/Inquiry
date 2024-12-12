@@ -1,4 +1,4 @@
-import { Resolver, Query, Mutation, Args } from '@nestjs/graphql';
+import { Resolver, Query, Mutation, Args, Int } from '@nestjs/graphql';
 import { UsersService } from './users.service';
 import { User } from './models/user.model';
 import { CreateUserInput } from './dto/create-user.dto';
@@ -52,5 +52,10 @@ export class UsersResolver {
     @Args('filter', { nullable: true }) filter?: GetUsersByNameInput, // Filter input is optional
   ) {
     return this.usersService.getUsersByName(filter); // Delegate the query logic to the UsersService
+  }
+
+  @Mutation(() => [Int])
+  async deleteUsers(@Args('userIds', { type: () => [Int] }) userIds: number[]) {
+    return this.usersService.deleteUsers(userIds);
   }
 }

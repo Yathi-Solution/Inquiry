@@ -32,7 +32,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { GET_FILTERED_USERS, GET_ALL_USERS } from "@/graphql/queries";
+import { GET_FILTERED_USERS, GET_ALL_USERS, DELETE_USERS } from "@/graphql/queries";
 import debounce from "lodash/debounce";
 import {
   Select,
@@ -241,6 +241,7 @@ export const columns: ColumnDef<User>[] = [
 ];
 
 export function Dashboard() {
+  const queryClient = useQueryClient();
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
@@ -299,6 +300,32 @@ export function Dashboard() {
     table.getColumn("role_id")?.setFilterValue(value === 'all' ? '' : value);
   };
 
+  const { mutate: deleteUsers } = useMutation({
+    mutationFn: async (userIds: number[]) => {
+      return request(
+        graphqlEndpoint,
+        DELETE_USERS,
+        { userIds }
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      setRowSelection({}); // Reset selection
+    },
+    onError: (error) => {
+      console.error('Error deleting users:', error);
+    }
+  });
+
+  const handleDelete = useCallback(() => {
+    const selectedRows = table.getFilteredSelectedRowModel().rows;
+    const userIds = selectedRows.map(row => parseInt(row.original.user_id));
+    
+    if (userIds.length > 0) {
+      deleteUsers(userIds);
+    }
+  }, [deleteUsers]);
+
   const table = useReactTable({
     data: data || [],
     columns,
@@ -332,12 +359,6 @@ export function Dashboard() {
   const selectedUsers = table.getFilteredSelectedRowModel().rows.map(
     (row) => row.original.name
   );
-
-  const handleDelete = () => {
-    const selectedRows = table.getFilteredSelectedRowModel().rows;
-    console.log('Selected rows to delete:', selectedRows);
-    // Implement your delete logic here
-  };
 
   const getRoleName = (roleId: string | undefined) => {
     if (!roleId) return '';
@@ -406,7 +427,7 @@ export function Dashboard() {
                 disabled={table.getFilteredSelectedRowModel().rows.length === 0}
               >
                 <Trash2 className="h-4 w-4" />
-                Delete Selected
+                Delete Selected ({table.getFilteredSelectedRowModel().rows.length})
               </Button>
             </AlertDialogTrigger>
             <AlertDialogContent>
