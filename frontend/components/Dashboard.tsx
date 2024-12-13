@@ -57,6 +57,20 @@ const ActionMenu = ({ user }: { user: User }) => {
   const [updatedUser, setUpdatedUser] = useState(user);
   const queryClient = useQueryClient();
   const closeRef = useRef<HTMLButtonElement>(null);
+  const locations = useContext(LocationContext);
+
+  // Add locations query
+  const { data: locationsData } = useQuery<LocationsResponse>({
+    queryKey: ['locations'],
+    queryFn: async () => {
+      const response = await request(
+        graphqlEndpoint,
+        GET_ALL_LOCATIONS
+      );
+      return response;
+    },
+    staleTime: Infinity,
+  });
 
   const { mutate: updateUser } = useMutation({
     mutationFn: async (variables: any) => {
@@ -77,17 +91,36 @@ const ActionMenu = ({ user }: { user: User }) => {
 
   const handleSave = async () => {
     try {
-      const updatePayload = {
-        user_id: parseInt(user.user_id),
-        name: updatedUser.name || user.name,
-        email: updatedUser.email || user.email,
-        role_id: parseInt(updatedUser.role_id || user.role_id),
-        location_id: parseInt(updatedUser.location_id || user.location_id)
+      // Create update payload only with changed fields
+      const updatePayload: any = {
+        user_id: parseInt(user.user_id)
       };
-      
-      updateUser({ 
-        updateUserInput: updatePayload
-      });
+
+      // Only include fields that have changed
+      if (updatedUser.name && updatedUser.name !== user.name) {
+        updatePayload.name = updatedUser.name;
+      }
+
+      if (updatedUser.email && updatedUser.email !== user.email) {
+        updatePayload.email = updatedUser.email;
+      }
+
+      if (updatedUser.role_id !== user.role_id) {
+        updatePayload.role_id = updatedUser.role_id ? parseInt(updatedUser.role_id) : null;
+      }
+
+      if (updatedUser.location_id && updatedUser.location_id !== user.location_id) {
+        updatePayload.location_id = parseInt(updatedUser.location_id);
+      }
+
+      // Only proceed with update if there are changes
+      if (Object.keys(updatePayload).length > 1) { // > 1 because user_id is always included
+        updateUser({ 
+          updateUserInput: updatePayload
+        });
+      } else {
+        closeRef.current?.click(); // Close if no changes
+      }
     } catch (error) {
       console.error('Failed to save user:', error);
     }
@@ -129,29 +162,43 @@ const ActionMenu = ({ user }: { user: User }) => {
           </div>
           <div className="space-y-2">
             <label htmlFor="role" className="text-sm font-medium">
-              Role ID
+              Role
             </label>
-            <Input
-              id="role"
-              type="number"
-              placeholder="Role ID"
-              defaultValue={user.role_id}
-              onChange={(e) => setUpdatedUser({ ...updatedUser, role_id: e.target.value })}
-              className="w-full"
-            />
+            <Select
+              value={String(updatedUser.role_id || 'null')}
+              onValueChange={(value) => setUpdatedUser({ ...updatedUser, role_id: value })}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select role" />
+              </SelectTrigger>
+              <SelectContent>
+                {roleOptions.filter(role => role.value !== 'all').map((role) => (
+                  <SelectItem key={role.value} value={role.value}>
+                    {role.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-2">
             <label htmlFor="location" className="text-sm font-medium">
-              Location ID
+              Location
             </label>
-            <Input
-              id="location"
-              type="number"
-              placeholder="Location ID"
-              defaultValue={user.location_id}
-              onChange={(e) => setUpdatedUser({ ...updatedUser, location_id: e.target.value })}
-              className="w-full"
-            />
+            <Select
+              value={String(updatedUser.location_id)}
+              onValueChange={(value) => setUpdatedUser({ ...updatedUser, location_id: value })}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select location" />
+              </SelectTrigger>
+              <SelectContent>
+                {Array.from(locations.entries()).map(([id, name]) => (
+                  <SelectItem key={id} value={id}>
+                    {name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <Button onClick={handleSave} className="w-full mt-6">
             Save changes
