@@ -24,6 +24,12 @@ export interface FilterUserInput {
   location_id?: string;
 }
 
+// Add interface for Location
+export interface Location {
+  location_id: string;
+  location_name: string;
+}
+
 // GraphQL Queries and Mutations
 export const GET_ALL_USERS = gql`
   query {
@@ -82,5 +88,24 @@ export const DELETE_USER = gql`
 export const DELETE_USERS = gql`
   mutation DeleteUsers($userIds: [Int!]!) {
     deleteUsers(userIds: $userIds)
+  }
+`;
+
+// Add the query for fetching all locations
+export const GET_ALL_LOCATIONS = gql`
+  query GetAllLocations {
+    locations {
+      location_id
+      location_name
+    }
+  }
+`;
+
+export const GET_LOCATION_BY_ID = gql`
+  query GetLocationById($input: GetLocationInput!) {
+    locationById(input: $input) {
+      location_id
+      location_name
+    }
   }
 `;
