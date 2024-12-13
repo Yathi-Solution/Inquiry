@@ -436,7 +436,10 @@ export function Dashboard() {
     }
   };
 
-  // Add resetFilters function
+  // Add ref for search input
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Update resetFilters function
   const resetFilters = useCallback(() => {
     // Reset filter state
     setFilter({ role_id: null, location_id: undefined });
@@ -457,7 +460,13 @@ export function Dashboard() {
     const roleSelect = document.querySelector('[name="role-select"]') as HTMLSelectElement;
     if (locationSelect) locationSelect.value = 'all';
     if (roleSelect) roleSelect.value = 'all';
-  }, [table]);
+
+    // Clear search input value
+    if (searchInputRef.current) {
+      searchInputRef.current.value = '';
+      debouncedSearch(''); // Trigger search with empty string
+    }
+  }, [table, debouncedSearch]);
 
   return (
     <LocationContext.Provider value={locationsMap}>
@@ -520,6 +529,7 @@ export function Dashboard() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 md:gap-4">
             <Input
+              ref={searchInputRef}
               placeholder="Filter by name..."
               onChange={(e) => debouncedSearch(e.target.value)}
               className="min-w-[200px]"
