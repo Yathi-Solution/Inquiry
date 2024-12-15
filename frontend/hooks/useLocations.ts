@@ -1,20 +1,18 @@
 import { useQuery } from '@tanstack/react-query';
 import { request } from 'graphql-request';
-import { GET_LOCATION_BY_ID } from '@/graphql/queries';
+import { GET_ALL_LOCATIONS } from '@/graphql/queries';
 
 const graphqlEndpoint = process.env.NEXT_PUBLIC_GRAPHQL_ENDPOINT!;
 
-export function useLocation(id: number) {
+export function useLocations() {
   return useQuery({
-    queryKey: ['location', id],
+    queryKey: ['locations'],
     queryFn: async () => {
       const response = await request(
         graphqlEndpoint,
-        GET_LOCATION_BY_ID,
-        { id }
+        GET_ALL_LOCATIONS
       );
-      return (response as { locationById: any }).locationById;
+      return (response as { locations: any[] }).locations;
     },
-    enabled: !!id, // Only run query if id is provided
   });
 }

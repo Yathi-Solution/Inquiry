@@ -18,20 +18,33 @@ interface RegisterUserData {
 
 export const registerUser = async (userData: RegisterUserData) => {
   try {
-    const response = await fetch('/api/register', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(userData),
-    });
+    const mutation = `
+      mutation CreateUser($createUserInput: CreateUserInput!) {
+        createUser(createUserInput: $createUserInput) {
+          user_id
+          name
+          email
+          role {
+            role_name
+          }
+          location {
+            location_name
+          }
+        }
+      }
+    `;
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || 'Registration failed');
-    }
+    const response = await axios.post(
+      process.env.NEXT_PUBLIC_GRAPHQL_ENDPOINT!,
+      {
+        query: mutation,
+        variables: {
+          createUserInput: userData
+        }
+      }
+    );
 
-    return response.json();
+    return response.data.data.createUser;
   } catch (error) {
     console.error('Registration error:', error);
     throw error;
