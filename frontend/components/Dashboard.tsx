@@ -1,367 +1,233 @@
 "use client";
 
-import React, { useState, useRef, useCallback, useContext, useEffect, useMemo, createContext } from "react";
+import React, { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import {
   ColumnDef,
+  ColumnFiltersState,
   SortingState,
+  VisibilityState,
   useReactTable,
   getCoreRowModel,
+  flexRender,
+  getPaginationRowModel,
   getSortedRowModel,
   getFilteredRowModel,
-  flexRender,
-  ColumnFiltersState,
-  VisibilityState,
-  getPaginationRowModel,
 } from "@tanstack/react-table";
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { request, gql } from 'graphql-request';
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { request } from "graphql-request";
+import { ArrowUpDown, Trash2, RefreshCw, Pencil } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button"; 
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetClose } from "@/components/ui/sheet";
+import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ArrowUpDown, Trash2 } from "lucide-react";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { GET_FILTERED_USERS, UPDATE_USER, GET_ALL_USERS, DELETE_USERS, GET_ALL_LOCATIONS } from "@/graphql/queries";
-import debounce from "lodash/debounce";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
+import { useAuth } from '@/context/AuthContext';
+import { GET_ALL_USERS, DELETE_USERS, UPDATE_USER } from "@/graphql/queries";
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from "@/components/ui/select";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+  SheetClose,
+} from "@/components/ui/sheet";
 
 const graphqlEndpoint = process.env.NEXT_PUBLIC_GRAPHQL_ENDPOINT!;
 
-export type User = {
-  user_id: string;
+interface EditingUser {
+  user_id: number;
   name: string;
   email: string;
-  role_id: string;
-  location_id: string;
-};
-
-const ActionMenu = ({ user }: { user: User }) => {
-  const [updatedUser, setUpdatedUser] = useState(user);
-  const queryClient = useQueryClient();
-  const closeRef = useRef<HTMLButtonElement>(null);
-  const locations = useContext(LocationContext);
-
-  // Add locations query
-  const { data: locationsData } = useQuery<LocationsResponse>({
-    queryKey: ['locations'],
-    queryFn: async () => {
-      const response = await request(
-        graphqlEndpoint,
-        GET_ALL_LOCATIONS
-      );
-      return response;
-    },
-    staleTime: Infinity,
-  });
-
-  const { mutate: updateUser } = useMutation({
-    mutationFn: async (variables: any) => {
-      return request(
-        graphqlEndpoint,
-        UPDATE_USER,
-        variables
-      );
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['users'] });
-      closeRef.current?.click();
-    },
-    onError: (error) => {
-      console.error('Error updating user:', error);
-    }
-  });
-
-  const handleSave = async () => {
-    try {
-      // Create update payload only with changed fields
-      const updatePayload: any = {
-        user_id: parseInt(user.user_id)
-      };
-
-      // Only include fields that have changed
-      if (updatedUser.name && updatedUser.name !== user.name) {
-        updatePayload.name = updatedUser.name;
-      }
-
-      if (updatedUser.email && updatedUser.email !== user.email) {
-        updatePayload.email = updatedUser.email;
-      }
-
-      if (updatedUser.role_id !== user.role_id) {
-        updatePayload.role_id = updatedUser.role_id ? parseInt(updatedUser.role_id) : null;
-      }
-
-      if (updatedUser.location_id && updatedUser.location_id !== user.location_id) {
-        updatePayload.location_id = parseInt(updatedUser.location_id);
-      }
-
-      // Only proceed with update if there are changes
-      if (Object.keys(updatePayload).length > 1) { // > 1 because user_id is always included
-        updateUser({ 
-          updateUserInput: updatePayload
-        });
-      } else {
-        closeRef.current?.click(); // Close if no changes
-      }
-    } catch (error) {
-      console.error('Failed to save user:', error);
-    }
-  };
-
-  return (
-    <Sheet>
-      <SheetTrigger asChild>
-        <Button variant="ghost">Edit</Button>
-      </SheetTrigger>
-      <SheetContent className="w-full sm:max-w-[400px]">
-        <SheetHeader>
-          <SheetTitle>Edit User</SheetTitle>
-        </SheetHeader>
-        <div className="space-y-4 py-4">
-          <div className="space-y-2">
-            <label htmlFor="name" className="text-sm font-medium">
-              Name
-            </label>
-            <Input
-              id="name"
-              placeholder="Name"
-              defaultValue={user.name}
-              onChange={(e) => setUpdatedUser({ ...updatedUser, name: e.target.value })}
-              className="w-full"
-            />
-          </div>
-          <div className="space-y-2">
-            <label htmlFor="email" className="text-sm font-medium">
-              Email
-            </label>
-            <Input
-              id="email"
-              placeholder="Email"
-              defaultValue={user.email}
-              onChange={(e) => setUpdatedUser({ ...updatedUser, email: e.target.value })}
-              className="w-full"
-            />
-          </div>
-          <div className="space-y-2">
-            <label htmlFor="role" className="text-sm font-medium">
-              Role
-            </label>
-            <Select
-              value={String(updatedUser.role_id || 'null')}
-              onValueChange={(value) => setUpdatedUser({ ...updatedUser, role_id: value })}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select role" />
-              </SelectTrigger>
-              <SelectContent>
-                {roleOptions.filter(role => role.value !== 'all').map((role) => (
-                  <SelectItem key={role.value} value={role.value}>
-                    {role.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <label htmlFor="location" className="text-sm font-medium">
-              Location
-            </label>
-            <Select
-              value={String(updatedUser.location_id)}
-              onValueChange={(value) => setUpdatedUser({ ...updatedUser, location_id: value })}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select location" />
-              </SelectTrigger>
-              <SelectContent>
-                {Array.from(locations.entries()).map(([id, name]) => (
-                  <SelectItem key={id} value={id}>
-                    {name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <Button onClick={handleSave} className="w-full mt-6">
-            Save changes
-          </Button>
-          <SheetClose ref={closeRef} className="hidden" />
-        </div>
-      </SheetContent>
-    </Sheet>
-  );
-};
-
-const roleOptions = [
-  { value: 'all', label: 'All Roles' },
-  { value: '1', label: 'Super-Admin' },
-  { value: '2', label: 'Salesperson' },
-  { value: '3', label: 'Location-Manager' },
-  { value: 'null', label: 'Customer' },
-];
-
-const LocationContext = createContext<Map<string, string>>(new Map());
-const RoleContext = React.createContext<{ roleOptions: typeof roleOptions }>({ roleOptions });
-
-export const columns: ColumnDef<User>[] = [
-  {
-    id: "select",
-    header: ({ table }) => (
-      <Checkbox
-        checked={table.getIsAllPageRowsSelected()}
-        onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-        aria-label="Select all"
-      />
-    ),
-    cell: ({ row }) => (
-      <Checkbox
-        checked={row.getIsSelected()}
-        onCheckedChange={(value) => row.toggleSelected(!!value)}
-        aria-label="Select row"
-      />
-    ),
-    enableSorting: false,
-    enableHiding: false,
-  },
-  {
-    accessorKey: "name",
-    header: ({ column }) => {
-      return (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          Name
-          <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      );
-    },
-  },
-  {
-    accessorKey: "email",
-    header: "Email",
-  },
-  {
-    accessorKey: "role_id",
-    header: "Role",
-    cell: ({ row }) => {
-      const roleId = row.getValue("role_id") as string;
-      const role = roleOptions.find(r => r.value === (roleId ? String(roleId) : 'null'));
-      return <div>{role?.label || 'Customer'}</div>;
-    },
-  },
-  {
-    accessorKey: "location_id",
-    header: "Location",
-    cell: ({ row }) => {
-      const locationId = String(row.getValue("location_id"));
-      const locations = useContext(LocationContext);
-      return <div>{locations.get(locationId) || 'Unknown Location'}</div>;
-    },
-  },
-  {
-    id: "actions",
-    cell: ({ row }) => <ActionMenu user={row.original} />,
-  },
-];
-
-interface Location {
+  role_id: number;
   location_id: number;
-  location_name: string;
+  role?: {
+    role_id: number;
+    role_name: string;
+  };
+  location?: {
+    location_id: number;
+    location_name: string;
+  };
 }
 
-interface LocationsResponse {
-  locations: Location[];
-}
-
-export function Dashboard() {
+export default function Dashboard() {
+  const { token } = useAuth();
+  const queryClient = useQueryClient();
+  const [roleFilter, setRoleFilter] = useState<string>('all');
+  const [locationFilter, setLocationFilter] = useState<string>('all');
+  const [nameFilter, setNameFilter] = useState<string>('');
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = useState({});
-  const [filter, setFilter] = useState<{ role_id: number | null; location_id: number | undefined }>({
-    role_id: null,
-    location_id: undefined
-  });
-  const [progress, setProgress] = useState(0);
+  const [editingUser, setEditingUser] = useState<EditingUser | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [selectedRow, setSelectedRow] = useState<any>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
 
-  const queryClient = useQueryClient();
-
-  // Fetch locations with caching
-  const { data: locationsData } = useQuery<LocationsResponse>({
-    queryKey: ['locations'],
-    queryFn: async () => {
-      const response = await request(
-        graphqlEndpoint,
-        GET_ALL_LOCATIONS
-      );
-      console.log('Locations response:', response);
-      return response;
-    },
-    staleTime: Infinity, // Cache locations permanently until manual invalidation
-  });
-
-  // Create memoized locations map with string keys
-  const locationsMap = useMemo(() => {
-    if (!locationsData?.locations) return new Map();
-    return new Map(
-      locationsData.locations.map(location => [
-        String(location.location_id),
-        location.location_name
-      ])
-    );
-  }, [locationsData]);
-
-  // Debounced search
-  const debouncedSearch = useMemo(
-    () =>
-      debounce((value: string) => {
-        table.getColumn("name")?.setFilterValue(value);
-      }, 300),
-    []
-  );
-
-  // Fetch users with optimized filtering
   const { data, isLoading, error } = useQuery({
-    queryKey: ['users', filter],
+    queryKey: ['users'],
     queryFn: async () => {
-      const queryFilter = {
-        ...(filter.role_id !== null && { role_id: filter.role_id }),
-        ...(filter.location_id !== undefined && { location_id: filter.location_id })
-      };
-
       const response = await request(
         graphqlEndpoint,
-        GET_FILTERED_USERS,
-        { filter: Object.keys(queryFilter).length > 0 ? queryFilter : undefined }
+        GET_ALL_USERS,
+        {},
+        { Authorization: `Bearer ${token}` }
       );
-      return response.usersByLocationAndRole;
+      return (response as { users: any[] }).users;
     },
+    enabled: !!token
   });
 
-  // Memoize table data
-  const tableData = useMemo(() => data || [], [data]);
+  const uniqueRoles = useMemo(() => {
+    if (!data) return [];
+    const rolesMap = new Map();
+    data.forEach(user => {
+      if (user.role && !rolesMap.has(user.role.role_id)) {
+        rolesMap.set(user.role.role_id, {
+          role_id: user.role.role_id,
+          role_name: user.role.role_name
+        });
+      }
+    });
+    return Array.from(rolesMap.values());
+  }, [data]);
+
+  const uniqueLocations = useMemo(() => {
+    if (!data) return [];
+    const locationsMap = new Map();
+    data.forEach(user => {
+      if (user.location && !locationsMap.has(user.location.location_id)) {
+        locationsMap.set(user.location.location_id, {
+          location_id: user.location.location_id,
+          location_name: user.location.location_name
+        });
+      }
+    });
+    return Array.from(locationsMap.values());
+  }, [data]);
+
+  useEffect(() => {
+    if (editingUser) {
+      console.log('Editing User:', editingUser);
+      console.log('Unique Roles:', uniqueRoles);
+      console.log('Unique Locations:', uniqueLocations);
+    }
+  }, [editingUser, uniqueRoles, uniqueLocations]);
+
+  const filteredData = useMemo(() => {
+    if (!data) return [];
+    return data.filter(user => {
+      const matchesRole = 
+        roleFilter === 'all' || 
+        user.role?.role_id?.toString() === roleFilter;
+      
+      const matchesLocation = 
+        locationFilter === 'all' || 
+        user.location?.location_id?.toString() === locationFilter;
+      
+      const matchesName = 
+        user.name?.toLowerCase().includes(nameFilter.toLowerCase());
+      
+      return matchesRole && matchesLocation && matchesName;
+    });
+  }, [data, roleFilter, locationFilter, nameFilter]);
+
+  const columns = useMemo<ColumnDef<any>[]>(() => [
+    {
+      id: "select",
+      header: ({ table }) => (
+        <Checkbox
+          checked={
+            table.getIsAllPageRowsSelected() ||
+            (table.getIsSomePageRowsSelected() && "indeterminate")
+          }
+          onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+          aria-label="Select all"
+        />
+      ),
+      cell: ({ row }) => (
+        <Checkbox
+          checked={row.getIsSelected()}
+          onCheckedChange={(value) => row.toggleSelected(!!value)}
+          aria-label="Select row"
+        />
+      ),
+      enableSorting: false,
+      enableHiding: false,
+    },
+    {
+      id: "name",
+      header: ({ column }) => {
+        return (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          >
+            Name
+            <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        );
+      },
+      accessorKey: "name",
+    },
+    {
+      id: "email",
+      header: "Email",
+      accessorKey: "email",
+    },
+    {
+      id: "role",
+      header: "Role",
+      accessorFn: (row) => row.role.role_name,
+    },
+    {
+      id: "location",
+      header: "Location",
+      accessorFn: (row) => row.location.location_name,
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      cell: ({ row }) => (
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => {
+            const user = row.original;
+            setEditingUser({
+              ...user,
+              role_id: user.role.role_id,
+              location_id: user.location.location_id,
+              role: user.role,
+              location: user.location
+            });
+            setSelectedRow(row);
+            setSheetOpen(true);
+          }}
+        >
+          <Pencil className="h-4 w-4" />
+        </Button>
+      )
+    },
+  ], [uniqueRoles, uniqueLocations, editingUser]);
 
   const table = useReactTable({
-    data: tableData,
+    data: filteredData,
     columns,
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
@@ -379,267 +245,366 @@ export function Dashboard() {
     },
   });
 
-  // Memoized handlers
-  const handleLocationChange = useCallback((value: string) => {
-    setFilter(prev => ({
-      ...prev,
-      location_id: value === 'all' ? undefined : parseInt(value)
-    }));
-  }, []);
+  const handleBulkDelete = async () => {
+    const selectedRows = table.getFilteredSelectedRowModel().rows;
+    const selectedIds = selectedRows.map(row => row.original.user_id);
+    
+    if (selectedIds.length === 0) return;
 
-  const handleRoleChange = useCallback((value: string) => {
-    setFilter(prev => ({
-      ...prev,
-      role_id: value === 'all' ? null : value === 'null' ? null : parseInt(value)
-    }));
-  }, []);
-
-  // Memoized selected users
-  const selectedUsers = useMemo(() => {
-    return table
-      .getFilteredSelectedRowModel()
-      .rows.map((row) => row.original.name);
-  }, [table, rowSelection]);
-
-  const { mutate: deleteUsers } = useMutation({
-    mutationFn: async (userIds: number[]) => {
-      return request(
+    try {
+      await request(
         graphqlEndpoint,
         DELETE_USERS,
-        { userIds }
+        { userIds: selectedIds },
+        { Authorization: `Bearer ${token}` }
       );
-    },
-    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
-    },
-    onError: (error) => {
-      console.error('Error deleting users:', error);
-    }
-  });
-
-  const handleDelete = async () => {
-    try {
-      const selectedRows = table.getFilteredSelectedRowModel().rows;
-      const userIds = selectedRows.map(row => parseInt(row.original.user_id));
-      
-      if (userIds.length === 0) {
-        console.log('No users selected');
-        return;
-      }
-
-      await deleteUsers(userIds);
-      
-      // Clear selection after successful deletion
-      table.toggleAllRowsSelected(false);
     } catch (error) {
-      console.error('Failed to delete users:', error);
+      console.error('Error deleting users:', error);
     }
   };
 
-  // Add ref for search input
-  const searchInputRef = useRef<HTMLInputElement>(null);
-
-  // Update resetFilters function
-  const resetFilters = useCallback(() => {
-    // Reset filter state
-    setFilter({ role_id: null, location_id: undefined });
+  const handleUpdateUser = async () => {
+    if (!editingUser) return;
     
-    // Reset column filters
-    table.getAllColumns().forEach((column) => {
-      column.setFilterValue('');
-    });
-    
-    // Reset sorting
-    setSorting([]);
-    
-    // Reset row selection
-    setRowSelection({});
-    
-    // Reset select elements to 'all'
-    const locationSelect = document.querySelector('[name="location-select"]') as HTMLSelectElement;
-    const roleSelect = document.querySelector('[name="role-select"]') as HTMLSelectElement;
-    if (locationSelect) locationSelect.value = 'all';
-    if (roleSelect) roleSelect.value = 'all';
-
-    // Clear search input value
-    if (searchInputRef.current) {
-      searchInputRef.current.value = '';
-      debouncedSearch(''); // Trigger search with empty string
+    if (!editingUser.name || !editingUser.email || !editingUser.role_id || !editingUser.location_id) {
+      alert('All fields are required');
+      return;
     }
-  }, [table, debouncedSearch]);
+    
+    setIsUpdating(true);
+    try {
+      await request(
+        graphqlEndpoint,
+        UPDATE_USER,
+        {
+          updateUserInput: {
+            user_id: editingUser.user_id,
+            name: editingUser.name,
+            email: editingUser.email,
+            role_id: parseInt(editingUser.role_id.toString()),
+            location_id: parseInt(editingUser.location_id.toString()),
+          }
+        },
+        { Authorization: `Bearer ${token}` }
+      );
+      
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      setEditingUser(null);
+    } catch (error) {
+      alert('Error updating user');
+      console.error('Error updating user:', error);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const resetFilters = useCallback(() => {
+    setNameFilter('');
+    setRoleFilter('all');
+    setLocationFilter('all');
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      setEditingUser(null);
+      setIsUpdating(false);
+    };
+  }, []);
+
+  if (isLoading) {
+    return (
+      <div className="w-full p-2 md:p-4 space-y-4 max-w-[1400px] mx-auto">
+        <div className="w-full h-[200px] flex flex-col items-center justify-center gap-4">
+          <div className="text-center text-muted-foreground">Loading...</div>
+          <Progress value={45} className="w-[60%] max-w-[400px]" />
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="w-full h-screen flex items-center justify-center">
+        <div className="text-center text-red-500">
+          Error loading data
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <LocationContext.Provider value={locationsMap}>
-      <RoleContext.Provider value={{ roleOptions }}>
-        <div className="w-full p-2 md:p-4 space-y-4 max-w-[1400px] mx-auto">
-          <div className="flex justify-between items-center">
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  className="flex items-center gap-2"
-                  disabled={table.getFilteredSelectedRowModel().rows.length === 0}
+    <div className="w-full p-2 md:p-4 space-y-4 max-w-[1400px] mx-auto">
+      <div className="flex justify-end">
+        <Button
+          variant="destructive"
+          size="sm"
+          onClick={handleBulkDelete}
+          disabled={table.getFilteredSelectedRowModel().rows.length === 0}
+        >
+          <Trash2 className="h-4 w-4 mr-2" />
+          Delete Selected
+        </Button>
+      </div>
+
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <Input
+            placeholder="Search by name..."
+            value={nameFilter}
+            onChange={(e) => setNameFilter(e.target.value)}
+            className="max-w-sm"
+          />
+
+          <Select
+            value={roleFilter}
+            onValueChange={(value) => {
+              console.log('Selected role:', value);
+              setRoleFilter(value);
+            }}
+          >
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Select role" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Roles</SelectItem>
+              {uniqueRoles.map((role) => (
+                <SelectItem 
+                  key={`filter-role-${role.role_id}`}
+                  value={role.role_id.toString()}
                 >
-                  <Trash2 className="h-4 w-4" />
-                  Delete Selected ({table.getFilteredSelectedRowModel().rows.length})
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                </AlertDialogHeader>
-                <div className="text-sm text-muted-foreground">
-                  This action cannot be undone. This will permanently delete the following users:
-                  <ul className="mt-2 list-disc list-inside space-y-1">
-                    {selectedUsers.map((name, index) => (
-                      <li key={index} className="text-sm font-medium">
-                        {name}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={handleDelete}
-                    className="bg-destructive hover:bg-destructive/90"
-                  >
-                    Delete
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-            
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">
-                {table.getFilteredSelectedRowModel().rows.length} of{" "}
-                {table.getFilteredRowModel().rows.length} row(s) selected.
-              </span>
-              <Button 
-                onClick={resetFilters} 
-                variant="outline" 
-                size="sm"
-                className="ml-2"
-              >
-                Reset Filters
-              </Button>
-            </div>
-          </div>
+                  {role.role_name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 md:gap-4">
-            <Input
-              ref={searchInputRef}
-              placeholder="Filter by name..."
-              onChange={(e) => debouncedSearch(e.target.value)}
-              className="min-w-[200px]"
-            />
-            <Select
-              value={String(filter.role_id || 'all')}
-              onValueChange={handleRoleChange}
-              name="role-select"
-            >
-              <SelectTrigger className="min-w-[200px]">
-                <SelectValue placeholder="Filter by role" />
-              </SelectTrigger>
-              <SelectContent>
-                {roleOptions.map((role) => (
-                  <SelectItem key={role.value} value={role.value}>
-                    {role.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select
-              value={String(filter.location_id || 'all')}
-              onValueChange={handleLocationChange}
-              name="location-select"
-            >
-              <SelectTrigger className="min-w-[200px]">
-                <SelectValue placeholder="Filter by location" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Locations</SelectItem>
-                {locationsData?.locations?.map((location) => (
-                  <SelectItem 
-                    key={location.location_id} 
-                    value={String(location.location_id)}
-                  >
-                    {location.location_name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          {isLoading ? (
-            <div className="w-full text-center py-4 dark:text-gray-300">
-              Loading...
-            </div>
-          ) : null}
-
-          {error ? (
-            <div className="w-full h-screen flex items-center justify-center">
-              <div className="text-center text-red-500 dark:text-red-400">
-                <p>Error: {(error as Error).message}</p>
-              </div>
-            </div>
-          ) : null}
-
-          <div className="overflow-auto border rounded-md dark:border-gray-800 dark:bg-transparent shadow-sm">
-            <div className="min-w-[600px]">
-              <Table>
-                <TableHeader>
-                  {table.getHeaderGroups().map((headerGroup) => (
-                    <TableRow key={headerGroup.id}>
-                      {headerGroup.headers.map((header) => (
-                        <TableHead key={header.id} className="whitespace-nowrap">
-                          {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
-                        </TableHead>
-                      ))}
-                    </TableRow>
-                  ))}
-                </TableHeader>
-                <TableBody>
-                  {table.getRowModel().rows.map((row) => (
-                    <TableRow key={row.id}>
-                      {row.getVisibleCells().map((cell) => (
-                        <TableCell key={cell.id} className="whitespace-nowrap">
-                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                        </TableCell>
-                      ))}
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </div>
-
-          <div className="flex items-center justify-end space-x-2 py-4">
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => table.previousPage()}
-                disabled={!table.getCanPreviousPage()}
-              >
-                Previous
-              </Button>
-              <div className="text-sm text-muted-foreground dark:text-gray-400">
-                Page {table.getState().pagination.pageIndex + 1} of{" "}
-                {table.getPageCount()}
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => table.nextPage()}
-                disabled={!table.getCanNextPage()}
-              >
-                Next
-              </Button>
-            </div>
-          </div>
+          <Select
+            value={locationFilter}
+            onValueChange={(value) => {
+              console.log('Selected location:', value);
+              setLocationFilter(value);
+            }}
+          >
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Select location" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Locations</SelectItem>
+              {uniqueLocations.map((location) => (
+                <SelectItem 
+                  key={`filter-location-${location.location_id}`}
+                  value={location.location_id.toString()}
+                >
+                  {location.location_name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
-      </RoleContext.Provider>
-    </LocationContext.Provider>
+
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => queryClient.invalidateQueries({ queryKey: ['users'] })}
+          >
+            <RefreshCw className="h-4 w-4" />
+            Refresh
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={resetFilters}
+          >
+            Reset Filters
+          </Button>
+        </div>
+      </div>
+
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            {table.getHeaderGroups().map((headerGroup) => (
+              <TableRow key={headerGroup.id}>
+                {headerGroup.headers.map((header) => (
+                  <TableHead key={header.id}>
+                    {flexRender(
+                      header.column.columnDef.header,
+                      header.getContext()
+                    )}
+                  </TableHead>
+                ))}
+              </TableRow>
+            ))}
+          </TableHeader>
+          <TableBody>
+            {table.getRowModel().rows.length > 0 ? (
+              table.getRowModel().rows.map((row) => (
+                <TableRow 
+                  key={row.id}
+                  data-state={row.getIsSelected() && "selected"}
+                >
+                  {row.getVisibleCells().map((cell) => (
+                    <TableCell key={cell.id}>
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell
+                  colSpan={columns.length}
+                  className="h-24 text-center"
+                >
+                  No results found.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      <div className="flex items-center justify-between py-4">
+        <div className="flex-1 text-sm text-muted-foreground">
+          {table.getFilteredSelectedRowModel().rows.length} of{" "}
+          {table.getFilteredRowModel().rows.length} row(s) selected.
+        </div>
+        <div className="space-x-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => table.previousPage()}
+            disabled={!table.getCanPreviousPage()}
+          >
+            Previous
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => table.nextPage()}
+            disabled={!table.getCanNextPage()}
+          >
+            Next
+          </Button>
+        </div>
+      </div>
+
+      <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+        <SheetContent side="right">
+          <SheetHeader>
+            <SheetTitle>Edit User</SheetTitle>
+          </SheetHeader>
+          {editingUser && (
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <label>Name</label>
+                <Input
+                  value={editingUser.name || ''}
+                  onChange={(e) => 
+                    setEditingUser(prev => prev ? {
+                      ...prev,
+                      name: e.target.value
+                    } : null)
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <label>Email</label>
+                <Input
+                  value={editingUser.email || ''}
+                  onChange={(e) => 
+                    setEditingUser(prev => prev ? {
+                      ...prev,
+                      email: e.target.value
+                    } : null)
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <label>Role</label>
+                <Select 
+                  value={editingUser.role_id?.toString()}
+                  onValueChange={(value) => {
+                    setEditingUser(prev => prev ? {
+                      ...prev,
+                      role_id: parseInt(value),
+                      role: uniqueRoles.find(role => role.role_id.toString() === value)
+                    } : null);
+                  }}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue>
+                      {editingUser.role?.role_name || "Select role"}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {uniqueRoles.map((role) => (
+                      <SelectItem 
+                        key={`select-role-${role.role_id}`}
+                        value={role.role_id.toString()}
+                      >
+                        {role.role_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <label>Location</label>
+                <Select 
+                  value={editingUser.location_id?.toString()}
+                  onValueChange={(value) => {
+                    setEditingUser(prev => prev ? {
+                      ...prev,
+                      location_id: parseInt(value),
+                      location: uniqueLocations.find(location => location.location_id.toString() === value)
+                    } : null);
+                  }}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue>
+                      {editingUser.location?.location_name || "Select location"}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {uniqueLocations.map((location) => (
+                      <SelectItem 
+                        key={`select-location-${location.location_id}`}
+                        value={location.location_id.toString()}
+                      >
+                        {location.location_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex justify-end gap-2 pt-4">
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    setEditingUser(null);
+                    setSheetOpen(false);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={async () => {
+                    await handleUpdateUser();
+                    setSheetOpen(false);
+                  }}
+                  disabled={isUpdating}
+                >
+                  {isUpdating ? 'Saving...' : 'Save Changes'}
+                </Button>
+              </div>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
+    </div>
   );
 }

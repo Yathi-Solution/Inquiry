@@ -1,10 +1,18 @@
-import {Dashboard} from '@/components/Dashboard'
-import React from 'react'
+"use client";
 
-export default function page() {
+import { QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient } from '@tanstack/react-query';
+import ErrorBoundary from '@/components/ErrorBoundary';
+import Dashboard from '@/components/Dashboard';
+
+const queryClient = new QueryClient();
+
+export default function DashboardPage() {
   return (
-    <>
-     <Dashboard /> 
-    </>
-  )
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <Dashboard />
+      </QueryClientProvider>
+    </ErrorBoundary>
+  );
 }

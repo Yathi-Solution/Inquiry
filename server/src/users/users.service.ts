@@ -1,66 +1,76 @@
-import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { PrismaService } from '../prisma-services/prisma.service';
 import { CreateUserInput } from './dto/create-user.dto';
 import { UpdateUserInput } from './dto/update-user.dto';
 import { FilterUserInput } from './dto/filter-user.dto';
 import { Prisma, User } from '@prisma/client';
 import { GetUsersByNameInput } from './dto/filter-name.dto';
+import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  // Get all users
   async getAllUsers() {
     return this.prisma.user.findMany({
-      include: { role: true, location: true },  // Include related data (role, location)
+      include: { role: true, location: true },
     });
   }
 
-  // Get a single user by ID
   async getUserById(id: number) {
-    return this.prisma.user.findUnique({
+    const user = await this.prisma.user.findUnique({
       where: { user_id: id },
-      include: { role: true, location: true },  // Include related data (role, location)
+      include: { role: true, location: true },
     });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    return user;
   }
 
-  // Create a new user
   async createUser(createUserInput: CreateUserInput) {
-    const { name, email, password, role_id, location_id } = createUserInput;
+    const { password, ...rest } = createUserInput;
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const existingUser = await this.prisma.user.findUnique({
+      where: { email: rest.email },
+    });
+
+    if (existingUser) {
+      throw new Error('User with this email already exists');
+    }
 
     return this.prisma.user.create({
       data: {
-        name,
-        email,
-        password,
-        role_id,
-        location_id,
+        ...rest,
+        password: hashedPassword,
       },
+      include: { role: true, location: true },
     });
   }
 
-  // Update an existing user
   async updateUser(updateUserInput: UpdateUserInput) {
-    const { user_id, name, email, password, role_id, location_id } = updateUserInput;
+    const { user_id, password, ...rest } = updateUserInput;
+    const data: any = { ...rest };
+
+    if (password) {
+      data.password = await bcrypt.hash(password, 10);
+    }
 
     return this.prisma.user.update({
       where: { user_id },
-      data: {
-        name,
-        email,
-        password,
-        role_id,
-        location_id,
-      },
+      data,
+      include: { role: true, location: true },
     });
   }
 
-  // Delete a user
   async deleteUser(id: number) {
-    return this.prisma.user.delete({
+    await this.prisma.user.delete({
       where: { user_id: id },
     });
+    return true;
   }
 
   async getUsersByLocationAndRole(filter?: FilterUserInput) {
@@ -83,14 +93,12 @@ export class UsersService {
     });
   }
 
-
   async getUsersByName(filter?: GetUsersByNameInput): Promise<User[]> {
-    // Construct the where condition based on filter (optional)
     const where: Prisma.UserWhereInput = filter?.name
       ? {
           name: {
-            contains: filter.name, // Filter by name
-            mode: Prisma.QueryMode.insensitive, // Use Prisma.QueryMode to specify the case-insensitive search
+            contains: filter.name,
+            mode: Prisma.QueryMode.insensitive,
           },
         }
       : {};
@@ -98,13 +106,13 @@ export class UsersService {
     return this.prisma.user.findMany({
       where,
       orderBy: filter?.sortByName
-        ? { name: filter.sortByName } // Sort by name if sorting is provided
+        ? { name: filter.sortByName }
         : undefined,
     });
   }
 
   async deleteUsers(userIds: number[]): Promise<number[]> {
-    const deletedUsers = await this.prisma.user.deleteMany({
+    await this.prisma.user.deleteMany({
       where: {
         user_id: {
           in: userIds
@@ -112,5 +120,65 @@ export class UsersService {
       }
     });
     return userIds;
+  }
+
+  async getLocationUsers(managerId: number) {
+    const manager = await this.validateManager(managerId);
+    return this.prisma.user.findMany({
+      where: {
+        location_id: manager.location_id,
+        role: { role_name: 'salesperson' }
+      },
+      include: {
+        role: true,
+        location: true,
+        customers: {
+          select: {
+            id: true,
+            name: true,
+            status: true,
+            visit_date: true,
+          }
+        },
+        _count: { select: { customers: true } }
+      },
+    });
+  }
+
+  async getSalespersonDetails(managerId: number, salespersonId: number) {
+    const manager = await this.validateManager(managerId);
+    const salesperson = await this.prisma.user.findFirst({
+      where: {
+        user_id: salespersonId,
+        location_id: manager.location_id,
+        role: { role_name: 'salesperson' }
+      },
+      include: {
+        role: true,
+        location: true,
+        customers: {
+          include: { location: true },
+          orderBy: { created_at: 'desc' }
+        },
+        _count: { select: { customers: true } }
+      },
+    });
+
+    if (!salesperson) {
+      throw new ForbiddenException('Salesperson not found or unauthorized access');
+    }
+    return salesperson;
+  }
+
+  private async validateManager(managerId: number) {
+    const manager = await this.prisma.user.findUnique({
+      where: { user_id: managerId },
+      include: { role: true }
+    });
+
+    if (!manager || manager.role?.role_name !== 'location-manager') {
+      throw new ForbiddenException('Unauthorized access');
+    }
+    return manager;
   }
 }

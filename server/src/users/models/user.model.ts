@@ -1,6 +1,7 @@
 import { ObjectType, Field, Int } from '@nestjs/graphql';
 import { Role } from '../../roles/models/role.model'; // Assuming you have a Role model defined
 import { Location } from '../../locations/models/location.model'; // Assuming you have a Location model defined
+import { Customer } from '../../customers/models/customer.model';
 
 @ObjectType()
 export class User {

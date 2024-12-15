@@ -39,6 +39,14 @@ export const GET_ALL_USERS = gql`
       email
       role_id
       location_id
+      role {
+        role_id
+        role_name
+      }
+      location {
+        location_id
+        location_name
+      }
     }
   }
 `;
@@ -59,20 +67,30 @@ export const GET_FILTERED_USERS = gql`
       user_id
       name
       email
-      role_id
-      location_id
+      role {
+        role_name
+      }
+      location {
+        location_name
+      }
     }
   }
 `;
 
 export const UPDATE_USER = gql`
-  mutation updateUser($updateUserInput: UpdateUserInput!) {
+  mutation UpdateUser($updateUserInput: UpdateUserInput!) {
     updateUser(updateUserInput: $updateUserInput) {
       user_id
       name
       email
-      role_id
-      location_id
+      role {
+        role_id
+        role_name
+      }
+      location {
+        location_id
+        location_name
+      }
     }
   }
 `;
