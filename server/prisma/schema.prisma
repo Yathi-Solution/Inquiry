@@ -18,7 +18,7 @@ model activity_logs {
 model customers {
   customer_id    Int       @id @default(autoincrement())
   name           String
-  email          String
+  email          String    @unique
   phone          String
   location_id    Int
   salesperson_id Int

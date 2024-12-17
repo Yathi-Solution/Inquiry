@@ -10,6 +10,7 @@ import { PrismaModule } from './prisma-services/prisma.module';
 import { GraphQLModule } from '@nestjs/graphql';  
 import { ApolloDriverConfig, ApolloDriver } from '@nestjs/apollo'; 
 import { AuthModule } from './auth/auth.module';
+import { CustomersModule } from './customers/customers.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { AuthModule } from './auth/auth.module';
     RolesModule,
     UsersModule,
     LocationsModule,
+    CustomersModule,
     SalespersonAssignmentsModule,
     ActivityLogsModule,
     PrismaModule,
@@ -25,7 +27,7 @@ import { AuthModule } from './auth/auth.module';
       autoSchemaFile: true,  
       playground: true,      
       path: 'graphql',    
-      context: ({ req }) => ({ req }),   
+      context: ({ req }:any) => ({ req }),   
     }),
   ],
   controllers: [AppController],
