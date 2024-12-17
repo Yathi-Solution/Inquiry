@@ -8,7 +8,7 @@ export class LocationsService {
   constructor(private prisma: PrismaService) {}
 
   async createLocation(createLocationDto: CreateLocationDto): Promise<Location> {
-    return this.prisma.location.create({
+    return this.prisma.locations.create({
       data: {
         location_name: createLocationDto.location_name,
       },
@@ -17,7 +17,7 @@ export class LocationsService {
 
   async getAllLocations(): Promise<Location[]> {
     try {
-      const locations = await this.prisma.location.findMany({
+      const locations = await this.prisma.locations.findMany({
         orderBy: {
           location_id: 'asc',
         },
@@ -31,14 +31,14 @@ export class LocationsService {
   }
 
   async deleteLocation(location_id: number): Promise<Location> {
-    return this.prisma.location.delete({
+    return this.prisma.locations.delete({
       where: { location_id },
     });
   }
 
   async getLocationById(location_id: number): Promise<Location | null> {
     try {
-      const location = await this.prisma.location.findUnique({
+      const location = await this.prisma.locations.findUnique({
         where: { location_id },
       });
       

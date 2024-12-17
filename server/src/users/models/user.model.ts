@@ -1,7 +1,6 @@
 import { ObjectType, Field, Int } from '@nestjs/graphql';
-import { Role } from '../../roles/models/role.model'; // Assuming you have a Role model defined
-import { Location } from '../../locations/models/location.model'; // Assuming you have a Location model defined
-import { Customer } from '../../customers/models/customer.model';
+import { Role } from '../../roles/models/role.model'; // Ensure this import is correct
+import { Location } from '../../locations/models/location.model'; // Ensure this import is correct
 
 @ObjectType()
 export class User {
@@ -14,15 +13,15 @@ export class User {
   @Field()
   email: string;
 
-  @Field(() => Role, { nullable: true }) // Role is nullable now since it's optional
-  role?: Role;
+  @Field(() => Role) // Role is now required
+  roles: Role;
 
-  @Field(() => Location) // Location is required because it's now non-nullable
-  location: Location;
+  @Field(() => Location) // Location is now required
+  locations: Location;
 
-  @Field(() => Int, { nullable: true })
-  role_id?: number; // role_id is now optional
+  @Field(() => Int) // role_id is required
+  role_id: number;
 
-  @Field(() => Int)
-  location_id: number; // location_id is now non-nullable
+  @Field(() => Int) // location_id is required
+  location_id: number;
 }

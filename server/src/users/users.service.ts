@@ -3,7 +3,7 @@ import { PrismaService } from '../prisma-services/prisma.service';
 import { CreateUserInput } from './dto/create-user.dto';
 import { UpdateUserInput } from './dto/update-user.dto';
 import { FilterUserInput } from './dto/filter-user.dto';
-import { Prisma, User } from '@prisma/client';
+import { Prisma, users } from '@prisma/client';
 import { GetUsersByNameInput } from './dto/filter-name.dto';
 import * as bcrypt from 'bcrypt';
 
@@ -12,15 +12,23 @@ export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getAllUsers() {
-    return this.prisma.user.findMany({
-      include: { role: true, location: true },
+    return this.prisma.users.findMany({
+      include: { roles: true, locations: true },
     });
   }
 
+  // async getAllUsers() {
+  //   const users = await this.prisma.users.findMany({
+  //     include: { roles: true, locations: true },
+  //   });
+  //   console.log('Fetched users-services:', users); // Log the users to see their structure
+  //   return users;
+  // }
+
   async getUserById(id: number) {
-    const user = await this.prisma.user.findUnique({
+    const user = await this.prisma.users.findUnique({
       where: { user_id: id },
-      include: { role: true, location: true },
+      include: { roles: true, locations: true },
     });
 
     if (!user) {
@@ -34,7 +42,7 @@ export class UsersService {
     const { password, ...rest } = createUserInput;
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const existingUser = await this.prisma.user.findUnique({
+    const existingUser = await this.prisma.users.findUnique({
       where: { email: rest.email },
     });
 
@@ -42,12 +50,12 @@ export class UsersService {
       throw new Error('User with this email already exists');
     }
 
-    return this.prisma.user.create({
+    return this.prisma.users.create({
       data: {
         ...rest,
         password: hashedPassword,
       },
-      include: { role: true, location: true },
+      include: { roles: true, locations: true },
     });
   }
 
@@ -59,22 +67,22 @@ export class UsersService {
       data.password = await bcrypt.hash(password, 10);
     }
 
-    return this.prisma.user.update({
+    return this.prisma.users.update({
       where: { user_id },
       data,
-      include: { role: true, location: true },
+      include: { roles: true, locations: true },
     });
   }
 
   async deleteUser(id: number) {
-    await this.prisma.user.delete({
+    await this.prisma.users.delete({
       where: { user_id: id },
     });
     return true;
   }
 
   async getUsersByLocationAndRole(filter?: FilterUserInput) {
-    const whereConditions: Prisma.UserWhereInput = {};
+    const whereConditions: Prisma.usersWhereInput = {};
 
     if (filter?.location_id) {
       whereConditions.location_id = filter.location_id;
@@ -84,17 +92,17 @@ export class UsersService {
       whereConditions.role_id = filter.role_id;
     }
 
-    return this.prisma.user.findMany({
+    return this.prisma.users.findMany({
       where: whereConditions,
       include: {
-        role: true,
-        location: true,
+        roles: true,
+        locations: true,
       },
     });
   }
 
-  async getUsersByName(filter?: GetUsersByNameInput): Promise<User[]> {
-    const where: Prisma.UserWhereInput = filter?.name
+  async getUsersByName(filter?: GetUsersByNameInput): Promise<users[]> {
+    const where: Prisma.usersWhereInput = filter?.name
       ? {
           name: {
             contains: filter.name,
@@ -103,7 +111,7 @@ export class UsersService {
         }
       : {};
 
-    return this.prisma.user.findMany({
+    return this.prisma.users.findMany({
       where,
       orderBy: filter?.sortByName
         ? { name: filter.sortByName }
@@ -112,7 +120,7 @@ export class UsersService {
   }
 
   async deleteUsers(userIds: number[]): Promise<number[]> {
-    await this.prisma.user.deleteMany({
+    await this.prisma.users.deleteMany({
       where: {
         user_id: {
           in: userIds
@@ -124,17 +132,17 @@ export class UsersService {
 
   async getLocationUsers(managerId: number) {
     const manager = await this.validateManager(managerId);
-    return this.prisma.user.findMany({
+    return this.prisma.users.findMany({
       where: {
         location_id: manager.location_id,
-        role: { role_name: 'salesperson' }
+        roles: { role_name: 'salesperson' }
       },
       include: {
-        role: true,
-        location: true,
+        roles: true,
+        locations: true,
         customers: {
           select: {
-            id: true,
+            customer_id: true,
             name: true,
             status: true,
             visit_date: true,
@@ -147,17 +155,17 @@ export class UsersService {
 
   async getSalespersonDetails(managerId: number, salespersonId: number) {
     const manager = await this.validateManager(managerId);
-    const salesperson = await this.prisma.user.findFirst({
+    const salesperson = await this.prisma.users.findFirst({
       where: {
         user_id: salespersonId,
         location_id: manager.location_id,
-        role: { role_name: 'salesperson' }
+        roles: { role_name: 'salesperson' }
       },
       include: {
-        role: true,
-        location: true,
+        roles: true,
+        locations: true,
         customers: {
-          include: { location: true },
+          include: { locations: true },
           orderBy: { created_at: 'desc' }
         },
         _count: { select: { customers: true } }
@@ -171,12 +179,12 @@ export class UsersService {
   }
 
   private async validateManager(managerId: number) {
-    const manager = await this.prisma.user.findUnique({
+    const manager = await this.prisma.users.findUnique({
       where: { user_id: managerId },
-      include: { role: true }
+      include: { roles: true }
     });
 
-    if (!manager || manager.role?.role_name !== 'location-manager') {
+    if (!manager || manager.roles?.role_name !== 'location-manager') {
       throw new ForbiddenException('Unauthorized access');
     }
     return manager;

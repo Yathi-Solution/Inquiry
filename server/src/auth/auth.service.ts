@@ -12,11 +12,11 @@ export class AuthService {
   ) {}
 
   async validateUser(email: string, password: string) {
-    const user = await this.prisma.user.findUnique({
+    const user = await this.prisma.users.findUnique({
       where: { email },
       include: { 
-        role: true,
-        location: true
+        roles: true,
+        locations: true
       },
     });
 
@@ -31,7 +31,7 @@ export class AuthService {
     const payload = { 
       email: user.email, 
       sub: user.user_id, 
-      role_id: user.role.role_id
+      role_id: user.role_id
     };
     return {
       access_token: this.jwtService.sign(payload),

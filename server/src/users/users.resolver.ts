@@ -21,6 +21,14 @@ export class UsersResolver {
   async getAllUsers() {
     return this.usersService.getAllUsers();
   }
+//   @UseGuards(JwtAuthGuard, RolesGuard)
+// @Roles(1, 2)
+// @Query(() => [User], { name: 'users' })
+// async getAllUsers() {
+//   const users = await this.usersService.getAllUsers();
+//   console.log('Fetched users:', JSON.stringify(users, null, 2)); // Log the users
+//   return users; // This returns the user data to the GraphQL layer
+// }
 
   @UseGuards(JwtAuthGuard)
   @Query(() => User, { name: 'user' })

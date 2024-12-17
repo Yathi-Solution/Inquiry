@@ -18,7 +18,7 @@ export class UserDto {
   @Field()
   role_id: number;
 
-  @Field({ nullable: true })
+  @Field()
   location_id?: number;
 
   @Field(type => String)

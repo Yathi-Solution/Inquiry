@@ -1,0 +1,71 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model activity_logs {
+  log_id     Int      @id @default(autoincrement())
+  user_id    Int
+  activity   String
+  created_at DateTime @default(now())
+  users      users    @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+}
+
+model customers {
+  customer_id    Int       @id @default(autoincrement())
+  name           String
+  email          String
+  phone          String
+  location_id    Int
+  salesperson_id Int
+  visit_date     DateTime
+  status         String    @default("pending")
+  notes          String?
+  created_at     DateTime  @default(now())
+  updated_at     DateTime
+  locations      locations @relation(fields: [location_id], references: [location_id])
+  users          users     @relation(fields: [salesperson_id], references: [user_id])
+}
+
+model locations {
+  location_id             Int                       @id @default(autoincrement())
+  location_name           String
+  customers               customers[]
+  salesperson_assignments salesperson_assignments[]
+  users                   users[]
+}
+
+model roles {
+  role_id   Int     @id @default(autoincrement())
+  role_name String  @unique
+  users     users[]
+}
+
+model salesperson_assignments {
+  assignment_id Int       @id @default(autoincrement())
+  user_id       Int
+  location_id   Int
+  status        Boolean   @default(true)
+  locations     locations @relation(fields: [location_id], references: [location_id])
+  users         users     @relation(fields: [user_id], references: [user_id])
+}
+
+model users {
+  user_id                 Int                       @id @default(autoincrement())
+  name                    String
+  email                   String                    @unique
+  password                String
+  role_id                 Int
+  location_id             Int
+  activity_logs           activity_logs[]
+  customers               customers[]
+  salesperson_assignments salesperson_assignments[]
+  locations               locations                 @relation(fields: [location_id], references: [location_id])
+  roles                   roles                     @relation(fields: [role_id], references: [role_id])
+
+  @@index([email], map: "idx_email")
+}
