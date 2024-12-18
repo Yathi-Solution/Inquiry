@@ -5,6 +5,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { PrismaModule } from '../prisma-services/prisma.module';
 import { AuthService } from './auth.service';
 import { AuthResolver } from './auth.resolver';
+import { ActivityLogsModule } from '../activity-logs/activity-logs.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { AuthResolver } from './auth.resolver';
       signOptions: { expiresIn: '1d' },
     }),
     PrismaModule,
+    ActivityLogsModule
   ],
   providers: [JwtStrategy, AuthService, AuthResolver],
   exports: [JwtModule, AuthService],

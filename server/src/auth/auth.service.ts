@@ -3,12 +3,14 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma-services/prisma.service';
 import * as bcrypt from 'bcrypt';
+import { ActivityLogsService } from '../activity-logs/activity-logs.service';
 
 @Injectable()
 export class AuthService {
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
+    private activityLogsService: ActivityLogsService
   ) {}
 
   async validateUser(email: string, password: string) {
@@ -33,9 +35,28 @@ export class AuthService {
       sub: user.user_id, 
       role_id: user.role_id
     };
+
+    await this.activityLogsService.createLog(user.user_id, {
+      activity: `User logged in - ${user.email}`,
+      log_type: 'AUTH'
+    });
+
     return {
       access_token: this.jwtService.sign(payload),
       user,
     };
+  }
+
+  async logout(userId: number) {
+    const user = await this.prisma.users.findUnique({
+      where: { user_id: userId }
+    });
+
+    await this.activityLogsService.createLog(userId, {
+      activity: `User logged out - ${user.email}`,
+      log_type: 'AUTH'
+    });
+
+    return true;
   }
 }

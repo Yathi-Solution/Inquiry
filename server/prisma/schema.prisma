@@ -8,11 +8,15 @@ datasource db {
 }
 
 model activity_logs {
-  log_id     Int      @id @default(autoincrement())
+  activity_id Int      @id @default(autoincrement())
   user_id    Int
   activity   String
+  log_type   String
   created_at DateTime @default(now())
   users      users    @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([log_type])
 }
 
 model customers {

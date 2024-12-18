@@ -1,0 +1,7 @@
+export enum LogType {
+  AUTH = 'AUTH',
+  USER_MGMT = 'USER_MGMT',
+  ASSIGNMENT = 'ASSIGNMENT',
+  CUSTOMER = 'CUSTOMER',
+  LOCATION = 'LOCATION'
+} 
