@@ -6,10 +6,14 @@ import { FilterUserInput } from './dto/filter-user.dto';
 import { Prisma, users } from '@prisma/client';
 import { GetUsersByNameInput } from './dto/filter-name.dto';
 import * as bcrypt from 'bcrypt';
+import { ActivityLogsService } from '../activity-logs/activity-logs.service';
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly activityLogsService: ActivityLogsService
+  ) {}
 
   async getAllUsers() {
     return this.prisma.users.findMany({
@@ -38,67 +42,70 @@ export class UsersService {
     return user;
   }
 
-  async createUser(createUserInput: CreateUserInput) {
-    const { password, ...rest } = createUserInput;
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    const existingUser = await this.prisma.users.findUnique({
-      where: { email: rest.email },
-    });
-
-    if (existingUser) {
-      throw new Error('User with this email already exists');
-    }
-
-    return this.prisma.users.create({
+  async createUser(createUserInput: CreateUserInput, currentUser: any) {
+    const user = await this.prisma.users.create({
       data: {
-        ...rest,
-        password: hashedPassword,
+        ...createUserInput,
+        password: await bcrypt.hash(createUserInput.password, 10),
       },
       include: { roles: true, locations: true },
     });
+
+    await this.activityLogsService.createLog(currentUser.user_id, {
+      activity: `Created new user - ${user.email}`,
+      log_type: 'USER_MGMT'
+    });
+
+    return user;
   }
 
-  async updateUser(updateUserInput: UpdateUserInput) {
-    const { user_id, password, ...rest } = updateUserInput;
-    const data: any = { ...rest };
-
-    if (password) {
-      data.password = await bcrypt.hash(password, 10);
-    }
-
-    return this.prisma.users.update({
-      where: { user_id },
-      data,
+  async updateUser(updateUserInput: UpdateUserInput, currentUser: any) {
+    const user = await this.prisma.users.update({
+      where: { user_id: updateUserInput.user_id },
+      data: updateUserInput,
       include: { roles: true, locations: true },
     });
+
+    await this.activityLogsService.createLog(currentUser.user_id, {
+      activity: `Updated user - ${user.email}`,
+      log_type: 'USER_MGMT'
+    });
+
+    return user;
   }
 
-  async deleteUser(id: number) {
+  async deleteUser(id: number, currentUser: any) {
+    const user = await this.prisma.users.findUnique({
+      where: { user_id: id }
+    });
+
     await this.prisma.users.delete({
       where: { user_id: id },
     });
+
+    await this.activityLogsService.createLog(currentUser.user_id, {
+      activity: `Deleted user - ${user.email}`,
+      log_type: 'USER_MGMT'
+    });
+
     return true;
   }
 
-  async getUsersByLocationAndRole(filter?: FilterUserInput) {
-    const whereConditions: Prisma.usersWhereInput = {};
-
-    if (filter?.location_id) {
-      whereConditions.location_id = filter.location_id;
-    }
-
-    if (filter?.role_id) {
-      whereConditions.role_id = filter.role_id;
-    }
-
-    return this.prisma.users.findMany({
-      where: whereConditions,
-      include: {
-        roles: true,
-        locations: true,
+  async getUsersByLocationAndRole(filter: FilterUserInput, currentUser: any) {
+    const users = await this.prisma.users.findMany({
+      where: {
+        ...(filter?.location_id && { location_id: filter.location_id }),
+        ...(filter?.role_id && { role_id: filter.role_id }),
       },
+      include: { roles: true, locations: true },
     });
+
+    await this.activityLogsService.createLog(currentUser.user_id, {
+      activity: `Filtered users by location:${filter?.location_id} and role:${filter?.role_id}`,
+      log_type: 'USER_MGMT'
+    });
+
+    return users;
   }
 
   async getUsersByName(filter?: GetUsersByNameInput): Promise<users[]> {
@@ -119,14 +126,20 @@ export class UsersService {
     });
   }
 
-  async deleteUsers(userIds: number[]): Promise<number[]> {
-    await this.prisma.users.deleteMany({
-      where: {
-        user_id: {
-          in: userIds
-        }
-      }
+  async deleteUsers(userIds: number[], currentUser: any): Promise<number[]> {
+    const users = await this.prisma.users.findMany({
+      where: { user_id: { in: userIds } }
     });
+
+    await this.prisma.users.deleteMany({
+      where: { user_id: { in: userIds } }
+    });
+
+    await this.activityLogsService.createLog(currentUser.user_id, {
+      activity: `Bulk deleted users - ${users.map(u => u.email).join(', ')}`,
+      log_type: 'USER_MGMT'
+    });
+
     return userIds;
   }
 
@@ -188,5 +201,45 @@ export class UsersService {
       throw new ForbiddenException('Unauthorized access');
     }
     return manager;
+  }
+
+  async changePassword(userId: number, oldPassword: string, newPassword: string, currentUser: any) {
+    const user = await this.prisma.users.findUnique({
+      where: { user_id: userId },
+      include: {
+        roles: true,
+        locations: true
+      }
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Verify old password
+    const isValidPassword = await bcrypt.compare(oldPassword, user.password);
+    if (!isValidPassword) {
+      // Log failed attempt
+      await this.activityLogsService.createLog(currentUser.user_id, {
+        activity: `Failed password change attempt for user - ${user.email} (Invalid current password)`,
+        log_type: 'USER_MGMT'
+      });
+      throw new ForbiddenException('Current password is incorrect');
+    }
+
+    // Update with new hashed password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await this.prisma.users.update({
+      where: { user_id: userId },
+      data: { password: hashedPassword }
+    });
+
+    // Log successful password change
+    await this.activityLogsService.createLog(currentUser.user_id, {
+      activity: `Password successfully changed for user - ${user.email} (${user.roles.role_name} at ${user.locations.location_name})`,
+      log_type: 'USER_MGMT'
+    });
+
+    return true;
   }
 }

@@ -10,6 +10,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { ChangePasswordInput } from './dto/change-password.dto';
 
 @Resolver(() => User)
 export class UsersResolver {
@@ -39,31 +40,43 @@ export class UsersResolver {
   // @UseGuards(JwtAuthGuard, RolesGuard)
   // @Roles('super-admin', 'location-manager')
   @Mutation(() => User)
-  async createUser(@Args('createUserInput') createUserInput: CreateUserInput) {
-    return this.usersService.createUser(createUserInput);
-  }
-
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(1, 2)
-  @Mutation(() => User)
-  async updateUser(@Args('updateUserInput') updateUserInput: UpdateUserInput) {
-    return this.usersService.updateUser(updateUserInput);
-  }
-
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(1, 2)
-  @Mutation(() => Boolean)
-  async deleteUser(@Args('id') id: number) {
-    return this.usersService.deleteUser(id);
-  }
-
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(1, 2)
-  @Query(() => [User], { name: 'usersByLocationAndRole' })
-  async getUsersByLocationAndRole(
-    @Args('filter', { nullable: true }) filter?: FilterUserInput,
+  @Roles(1)
+  async createUser(
+    @Args('createUserInput') createUserInput: CreateUserInput,
+    @CurrentUser() currentUser: any
   ) {
-    return this.usersService.getUsersByLocationAndRole(filter);
+    return this.usersService.createUser(createUserInput, currentUser);
+  }
+
+  @Mutation(() => User)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(1, 2)
+  async updateUser(
+    @Args('updateUserInput') updateUserInput: UpdateUserInput,
+    @CurrentUser() currentUser: any
+  ) {
+    return this.usersService.updateUser(updateUserInput, currentUser);
+  }
+
+  @Mutation(() => Boolean)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(1)
+  async deleteUser(
+    @Args('id') id: number,
+    @CurrentUser() currentUser: any
+  ) {
+    return this.usersService.deleteUser(id, currentUser);
+  }
+
+  @Query(() => [User])
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(1, 2)
+  async getUsersByLocationAndRole(
+    @CurrentUser() currentUser: any,
+    @Args('filter', { nullable: true }) filter?: FilterUserInput
+  ) {
+    return this.usersService.getUsersByLocationAndRole(filter, currentUser);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -77,8 +90,11 @@ export class UsersResolver {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(1, 2)
   @Mutation(() => [Int])
-  async deleteUsers(@Args('userIds', { type: () => [Int] }) userIds: number[]) {
-    return this.usersService.deleteUsers(userIds);
+  async deleteUsers(
+    @Args('userIds', { type: () => [Int] }) userIds: number[],
+    @CurrentUser() currentUser: any
+  ) {
+    return this.usersService.deleteUsers(userIds, currentUser);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -94,5 +110,19 @@ export class UsersResolver {
     @Args('salespersonId', { type: () => Int }) salespersonId: number
   ) {
     return this.usersService.getSalespersonDetails(user.user_id, salespersonId);
+  }
+
+  @Mutation(() => Boolean)
+  @UseGuards(JwtAuthGuard)
+  async changePassword(
+    @CurrentUser() currentUser: any,
+    @Args('input') input: ChangePasswordInput
+  ) {
+    return this.usersService.changePassword(
+      currentUser.user_id, 
+      input.oldPassword, 
+      input.newPassword,
+      currentUser
+    );
   }
 }

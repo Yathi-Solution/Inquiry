@@ -13,34 +13,39 @@ export class AuthService {
     private activityLogsService: ActivityLogsService
   ) {}
 
-  async validateUser(email: string, password: string) {
+  async validateUser(email: string, password: string): Promise<any> {
     const user = await this.prisma.users.findUnique({
       where: { email },
-      include: { 
-        roles: true,
-        locations: true
-      },
+      include: { roles: true, locations: true }
     });
 
     if (user && await bcrypt.compare(password, user.password)) {
-      const { password, ...result } = user;
-      return result;
+      await this.activityLogsService.createLog(user.user_id, {
+        activity: `Successful login - ${user.email} (${user.roles.role_name})`,
+        log_type: 'AUTH'
+      });
+      return user;
     }
+
+    // Log failed attempt
+    if (user) {
+      await this.activityLogsService.createLog(user.user_id, {
+        activity: `Failed login attempt - ${user.email} (Invalid password)`,
+        log_type: 'AUTH'
+      });
+    } else {
+      // Generic log for non-existent user
+      await this.activityLogsService.createLog(0, {
+        activity: `Failed login attempt - ${email} (User not found)`,
+        log_type: 'AUTH'
+      });
+    }
+    
     return null;
   }
 
   async login(user: any) {
-    const payload = { 
-      email: user.email, 
-      sub: user.user_id, 
-      role_id: user.role_id
-    };
-
-    await this.activityLogsService.createLog(user.user_id, {
-      activity: `User logged in - ${user.email}`,
-      log_type: 'AUTH'
-    });
-
+    const payload = { email: user.email, sub: user.user_id };
     return {
       access_token: this.jwtService.sign(payload),
       user,
