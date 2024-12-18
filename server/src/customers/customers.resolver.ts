@@ -11,6 +11,7 @@ import { CreateCustomerInput } from './dto/create-customer.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { GraphQLError } from 'graphql';
 import { PrismaService } from '../prisma-services/prisma.service';
+import { Int } from '@nestjs/graphql';
 
 @Resolver(() => CustomerDto)
 export class CustomersResolver {
@@ -19,17 +20,67 @@ export class CustomersResolver {
     private readonly prisma: PrismaService,
   ) {}
 
+  @Query(() => [CustomerDto])
   @UseGuards(JwtAuthGuard)
-  @Query(() => [CustomerDto], { name: 'getCustomersBySalespersonId' }) // Ensure the name matches
-  async getCustomersBySalespersonId(
-    @CurrentUser() user: any,
-    @Args('filter', { nullable: true }) filter?: FilterCustomersInput,
+  async getCustomers(
+    @Context() context: any,
+    @Args('filters', { nullable: true }) filters?: FilterCustomersInput
   ) {
-    return this.customersService.getCustomers(
-      filter,
-      user.user_id,
-      user.role_name,
-    );
+    const user = context.req.user;
+    if (!user) {
+      throw new GraphQLError('User not authenticated');
+    }
+
+    // Debug log
+    console.log('User data:', {
+      user_id: user.user_id,
+      role_id: user.role_id,
+      role_name: user.role_name
+    });
+
+    // Fetch user with role information if role_name is missing
+    if (!user.role_name) {
+      const userWithRole = await this.prisma.users.findUnique({
+        where: { user_id: user.user_id },
+        include: { roles: true }
+      });
+
+      if (!userWithRole) {
+        throw new GraphQLError('User not found');
+      }
+
+      user.role_name = userWithRole.roles.role_name;
+    }
+
+    return this.customersService.getCustomers(user.user_id, user.role_name, filters);
+  }
+
+  @Query(() => Int)
+  @UseGuards(JwtAuthGuard)
+  async getCustomersCount(
+    @Context() context: any,
+    @Args('filters', { nullable: true }) filters?: FilterCustomersInput
+  ) {
+    const user = context.req.user;
+    if (!user) {
+      throw new GraphQLError('User not authenticated');
+    }
+
+    // Fetch user with role information if role_name is missing
+    if (!user.role_name) {
+      const userWithRole = await this.prisma.users.findUnique({
+        where: { user_id: user.user_id },
+        include: { roles: true }
+      });
+
+      if (!userWithRole) {
+        throw new GraphQLError('User not found');
+      }
+
+      user.role_name = userWithRole.roles.role_name;
+    }
+
+    return this.customersService.getCustomersCount(user.user_id, user.role_name, filters);
   }
 
   @Mutation(() => CustomerDto)

@@ -47,6 +47,7 @@ model roles {
 
 model salesperson_assignments {
   assignment_id Int       @id @default(autoincrement())
+  assignment_code  String
   user_id       Int
   location_id   Int
   status        Boolean   @default(true)
