@@ -68,58 +68,69 @@ export default function ProfilePage() {
   };
 
   return (
-    <div className="container mx-auto py-10">
+    <div className="container mx-auto px-4 py-6 sm:py-10">
       <h1 className="text-2xl font-bold mb-6">Profile</h1>
       
-      <div className="grid gap-6 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Personal Information</CardTitle>
+      <div className="grid gap-6 sm:grid-cols-1 md:grid-cols-2">
+        <Card className="w-full">
+          <CardHeader className="space-y-1">
+            <CardTitle className="text-xl sm:text-2xl">Personal Information</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div>
+            <div className="space-y-2">
               <p className="text-sm text-muted-foreground">Name</p>
-              <p className="font-medium">{user.name}</p>
+              <p className="text-base sm:text-lg font-medium">{user.name}</p>
             </div>
-            <div>
+            <div className="space-y-2">
               <p className="text-sm text-muted-foreground">Email</p>
-              <p className="font-medium">{user.email}</p>
+              <p className="text-base sm:text-lg font-medium break-all">{user.email}</p>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Role & Location</CardTitle>
+        <Card className="w-full">
+          <CardHeader className="space-y-1">
+            <CardTitle className="text-xl sm:text-2xl">Role & Location</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div>
+            <div className="space-y-2">
               <p className="text-sm text-muted-foreground">Role</p>
-              <Badge variant="secondary" className="mt-1">
+              <Badge variant="secondary" className="text-sm sm:text-base px-3 py-1">
                 {getRoleName(user.role_id)}
               </Badge>
             </div>
-            <div>
+            <div className="space-y-2">
               <p className="text-sm text-muted-foreground">Location</p>
-              <Badge variant="outline" className="mt-1">
+              <Badge variant="outline" className="text-sm sm:text-base px-3 py-1">
                 {location || "Loading..."}
               </Badge>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Account Settings</CardTitle>
+        <Card className="w-full md:col-span-2">
+          <CardHeader className="space-y-1">
+            <CardTitle className="text-xl sm:text-2xl">Account Settings</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Button 
-              variant="outline" 
-              onClick={() => router.push('/change-password')}
-              className="w-full"
-            >
-              Change Password
-            </Button>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Button 
+                variant="outline" 
+                onClick={() => router.push('/change-password')}
+                className="w-full"
+              >
+                Change Password
+              </Button>
+              <Button 
+                variant="destructive"
+                className="w-full"
+                onClick={() => {
+                  // Add logout functionality
+                }}
+              >
+                Logout
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>

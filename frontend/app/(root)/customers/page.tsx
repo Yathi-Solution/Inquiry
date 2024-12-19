@@ -460,31 +460,33 @@ export default function CustomersPage() {
   }
 
   return (
-    <div className="container mx-auto py-10">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Customers</h1>
+    <div className="container mx-auto px-4 py-6 sm:py-10">
+      {/* Header Section */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+        <h1 className="text-xl sm:text-2xl font-bold">Customers</h1>
         <Button 
           onClick={() => router.push('/customers/create')}
-          className="flex items-center gap-2"
+          className="w-full sm:w-auto flex items-center justify-center gap-2"
         >
           <Plus className="h-4 w-4" />
           Add Customer
         </Button>
       </div>
 
-      <div className="rounded-md border">
+      {/* Table Section */}
+      <div className="overflow-x-auto rounded-md border">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Phone</TableHead>
-              <TableHead>Visit Date</TableHead>
-              <TableHead>Status</TableHead>
+              <TableHead className="min-w-[150px]">Name</TableHead>
+              <TableHead className="min-w-[200px]">Email</TableHead>
+              <TableHead className="min-w-[120px]">Phone</TableHead>
+              <TableHead className="min-w-[120px]">Visit Date</TableHead>
+              <TableHead className="min-w-[100px]">Status</TableHead>
               {user?.role_id !== 3 && (
-                <TableHead>Salesperson</TableHead>
+                <TableHead className="min-w-[150px]">Salesperson</TableHead>
               )}
-              <TableHead>Actions</TableHead>
+              <TableHead className="w-[50px]">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -503,24 +505,28 @@ export default function CustomersPage() {
                         {customer.name}
                       </button>
                     </DrawerTrigger>
-                    <DrawerContent className="bg-background">
-                      <DrawerHeader>
-                        <DrawerTitle>Customer Details</DrawerTitle>
+                    <DrawerContent className="bg-background p-4 sm:p-6">
+                      <DrawerHeader className="pb-4">
+                        <DrawerTitle className="text-lg sm:text-xl">Customer Details</DrawerTitle>
                       </DrawerHeader>
                       {selectedCustomer && (
-                        <div className="p-6 space-y-4">
+                        <div className="space-y-4">
                           <div>
-                            <h3 className="font-semibold">Notes</h3>
-                            <p className="mt-1">{selectedCustomer.notes || 'No notes available'}</p>
+                            <h3 className="font-semibold text-sm sm:text-base">Notes</h3>
+                            <p className="mt-1 text-sm sm:text-base">{selectedCustomer.notes || 'No notes available'}</p>
                           </div>
                           <div>
-                            <h3 className="font-semibold">Created At</h3>
-                            <p className="mt-1">{format(new Date(selectedCustomer.created_at), 'PPP')}</p>
+                            <h3 className="font-semibold text-sm sm:text-base">Created At</h3>
+                            <p className="mt-1 text-sm sm:text-base">
+                              {format(new Date(selectedCustomer.created_at), 'PPP')}
+                            </p>
                           </div>
                           {user?.role_id !== 3 && (
                             <div>
-                              <h3 className="font-semibold">Salesperson</h3>
-                              <p className="mt-1">{getSalespersonName(selectedCustomer.salesperson_id)}</p>
+                              <h3 className="font-semibold text-sm sm:text-base">Salesperson</h3>
+                              <p className="mt-1 text-sm sm:text-base">
+                                {getSalespersonName(selectedCustomer.salesperson_id)}
+                              </p>
                             </div>
                           )}
                         </div>
@@ -567,14 +573,14 @@ export default function CustomersPage() {
         </Table>
       </div>
 
-      {/* Edit Customer Sheet */}
+      {/* Edit Sheet */}
       <Sheet open={isEditing} onOpenChange={setIsEditing}>
-        <SheetContent>
-          <SheetHeader>
-            <SheetTitle>Edit Customer</SheetTitle>
+        <SheetContent className="w-full sm:max-w-lg">
+          <SheetHeader className="space-y-2">
+            <SheetTitle className="text-lg sm:text-xl">Edit Customer</SheetTitle>
           </SheetHeader>
           {editingCustomer && (
-            <div className="space-y-4 mt-4 max-h-[80vh] overflow-y-auto pr-6">
+            <div className="mt-4 space-y-4 max-h-[calc(100vh-10rem)] overflow-y-auto pr-4">
               <EditCustomerFields 
                 editingCustomer={editingCustomer}
                 setEditingCustomer={setEditingCustomer}
@@ -589,17 +595,21 @@ export default function CustomersPage() {
                   } : null)
                 }
               />
-              <div className="flex justify-end gap-2 pt-4">
+              <div className="flex flex-col sm:flex-row justify-end gap-2 pt-4">
                 <Button 
                   variant="outline" 
                   onClick={() => {
                     setEditingCustomer(null);
                     setIsEditing(false);
                   }}
+                  className="w-full sm:w-auto"
                 >
                   Cancel
                 </Button>
-                <Button onClick={handleUpdateCustomer}>
+                <Button 
+                  onClick={handleUpdateCustomer}
+                  className="w-full sm:w-auto"
+                >
                   Save Changes
                 </Button>
               </div>
