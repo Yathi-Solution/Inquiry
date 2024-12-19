@@ -33,6 +33,7 @@ import { request } from 'graphql-request';
 import { toast } from 'sonner';
 import { CREATE_USER } from "@/graphql/queries";
 import { GET_LOCATIONS } from '@/graphql/queries';
+import { Card, CardContent } from '@/components/ui/card';
 
 // Define the form schema
 const formSchema = z.object({
@@ -213,31 +214,29 @@ export default function Register() {
   }
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
+    setIsLoading(true);
     try {
-      // Debug log the values being sent
-      console.log('Sending registration data:', {
+      // Create the input object with explicit type conversion
+      const createUserInput = {
         name: values.name,
         email: values.email,
+        password: values.password,
         role_id: Number(values.role_id),
         location_id: Number(values.location_id)
-      });
+      };
+
+      console.log('Sending registration data:', createUserInput); // Debug log
 
       const response = await request<CreateUserResponse>(
         process.env.NEXT_PUBLIC_GRAPHQL_ENDPOINT!,
         CREATE_USER,
+        { createUserInput }, // Change this line - use createUserInput as the variable name
         {
-          input: {
-            name: values.name,
-            email: values.email,
-            password: values.password,
-            role_id: Number(values.role_id),
-            location_id: Number(values.location_id)
-          }
-        },
-        {
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${token}`
         }
       );
+
+      console.log('Registration response:', response); // Debug log
 
       if (response.createUser) {
         toast.success("User registered successfully!");
@@ -245,301 +244,276 @@ export default function Register() {
         router.push('/dashboard');
       }
     } catch (error: any) {
-      // More detailed error logging
-      console.error('Registration error details:', {
-        error: error?.response?.errors,
-        status: error?.response?.status,
-        message: error?.message
+      console.error('Registration error:', {
+        values: values,
+        error: error,
+        message: error?.message,
+        response: error?.response
       });
-      
-      // Show specific error message
-      const errorMessage = 
-        error?.response?.errors?.[0]?.message || 
-        error?.message || 
-        "Failed to register user. Please check if the location exists and email is unique.";
-      
-      toast.error(errorMessage);
+      toast.error(error?.response?.errors?.[0]?.message || "Failed to register user");
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-gray-950 p-4 md:p-8">
-      <div className="flex min-h-[calc(100vh-4rem)] rounded-xl overflow-hidden shadow-2xl">
-        {/* Left side with carousel - exactly half */}
-        <div className="relative w-1/2 hidden lg:block bg-zinc-900 rounded-l-xl">
-          <Carousel 
-            ref={emblaRef}
-            className="w-full h-full" 
-            opts={{ 
-              loop: true,
-              align: "start"
-            }}
-            plugins={[
-              Autoplay({
-                delay: 2000,
-                stopOnInteraction: false
-              })
-            ]}
+    <div className="container mx-auto min-h-screen px-4 py-6 sm:py-10">
+      <div className="flex flex-col md:grid md:grid-cols-2 gap-8">
+        {/* Image Carousel Section - Shows on top for mobile */}
+        <div className="order-1 md:order-2">
+          <Carousel
+            opts={{ loop: true }}
+            plugins={[Autoplay({ delay: 5000 })]}
+            className="w-full max-w-lg mx-auto"
           >
-            <CarouselContent className="-ml-0">
+            <CarouselContent>
               {slides.map((item, index) => (
-                <CarouselItem key={index} className="pl-0 h-[calc(100vh-2rem)]">
-                  <div className="relative w-full h-full">
-                    <img
-                      src={item.image}
-                      alt={`Slide ${index + 1}`}
-                      className="absolute inset-0 w-full h-full object-cover"
-                      style={{ margin: 0 }}
-                    />
-                    {/* Dark overlay */}
-                    <div className="absolute inset-0 bg-zinc-900/70" />
-                    
-                    {/* Content for each slide */}
-                    <div className="absolute inset-0 z-20 flex flex-col justify-between p-12">
-                      <div className="flex items-center text-lg font-medium">
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          className="mr-2 h-6 w-6 text-white"
-                        >
-                          <path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3" />
-                        </svg>
-                        <span className="text-white">Your Company Name</span>
-                      </div>
-                      
-                      <div className="space-y-4">
-                        <blockquote className="space-y-2">
-                          <p className="text-lg text-white">
-                            &ldquo;{item.quote}&rdquo;
-                          </p>
-                          <footer className="text-sm">
-                            <p className="text-white font-medium">{item.author}</p>
-                            <p className="text-gray-300">{item.role}</p>
-                          </footer>
-                        </blockquote>
-                      </div>
-                    </div>
+                <CarouselItem key={index} className="pl-1">
+                  <div className="p-1">
+                    <Card>
+                      <CardContent className="flex aspect-square items-center justify-center p-6 relative overflow-hidden">
+                        <img
+                          src={item.image}
+                          alt={`Slide ${index + 1}`}
+                          className="w-full h-full object-cover absolute inset-0"
+                        />
+                        <div className="absolute inset-0 bg-black/50" /> {/* Dark overlay */}
+                        <div className="relative z-10 text-center space-y-4">
+                          <div className="flex items-center justify-center text-lg font-medium">
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              className="mr-2 h-6 w-6 text-white"
+                            >
+                              <path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3" />
+                            </svg>
+                            <span className="text-white">Your Company Name</span>
+                          </div>
+                          
+                          <div className="space-y-4">
+                            <blockquote className="space-y-2">
+                              <p className="text-lg text-white">
+                                &ldquo;{item.quote}&rdquo;
+                              </p>
+                              <footer className="text-sm text-white">
+                                <p className="font-semibold">{item.author}</p>
+                                <p className="opacity-80">{item.role}</p>
+                              </footer>
+                            </blockquote>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
                   </div>
                 </CarouselItem>
               ))}
             </CarouselContent>
-            <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 flex gap-2 z-30">
-              {slides.map((_, index) => (
-                <button
-                  key={index}
-                  onClick={() => emblaApi?.scrollTo(index)}
-                  className={`w-2.5 h-2.5 rounded-full transition-all ${
-                    selectedIndex === index 
-                      ? "bg-white scale-100" 
-                      : "bg-white/50 scale-75 hover:scale-100"
-                  }`}
-                />
-              ))}
+            <div className="hidden sm:block">
+              <CarouselPrevious />
+              <CarouselNext />
             </div>
           </Carousel>
         </div>
 
-        {/* Right side with form - exactly half */}
-        <div className="w-full lg:w-1/2 flex flex-col justify-center bg-white dark:bg-gray-900 rounded-r-xl">
-          <div className="mx-auto w-full max-w-[440px] space-y-6 p-8">
-            <div className="space-y-2 text-center">
-              <h2 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-gray-100">
-                Register New User
-              </h2>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                Create a new user account with appropriate permissions
-              </p>
-            </div>
-
-            {error && (
-              <div className="rounded-lg bg-destructive/15 text-destructive px-4 py-3 text-sm">
-                {error}
-              </div>
-            )}
-
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                {/* Name Field */}
-                <FormField
-                  control={form.control}
-                  name="name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-sm font-medium">Name</FormLabel>
-                      <FormControl>
-                        <Input 
-                          placeholder="Enter name" 
-                          className="mt-1"
-                          {...field} 
-                        />
-                      </FormControl>
-                      <FormDescription className="text-xs text-gray-500">
-                        Enter the user's full name
-                      </FormDescription>
-                      <FormMessage className="text-xs text-red-500" />
-                    </FormItem>
-                  )}
-                />
-
-                {/* Email Field */}
-                <FormField
-                  control={form.control}
-                  name="email"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-sm font-medium">Email</FormLabel>
-                      <FormControl>
-                        <Input 
-                          type="email" 
-                          placeholder="Enter email"
-                          className="mt-1" 
-                          autoComplete="off"
-                          {...field} 
-                          value={field.value || ''}
-                        />
-                      </FormControl>
-                      <FormDescription className="text-xs text-gray-500">
-                        Enter a valid email address
-                      </FormDescription>
-                      <FormMessage className="text-xs text-red-500" />
-                    </FormItem>
-                  )}
-                />
-
-                {/* Password Field */}
-                <FormField
-                  control={form.control}
-                  name="password"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-sm font-medium">Password</FormLabel>
-                      <FormControl>
-                        <Input 
-                          type="password" 
-                          placeholder="Enter password"
-                          className="mt-1" 
-                          autoComplete="new-password"
-                          {...field} 
-                          value={field.value || ''}
-                        />
-                      </FormControl>
-                      <FormDescription className="text-xs text-gray-500">
-                        Password must be at least 6 characters
-                      </FormDescription>
-                      <FormMessage className="text-xs text-red-500" />
-                    </FormItem>
-                  )}
-                />
-
-                {/* Role Field */}
-                <FormField
-                  control={form.control}
-                  name="role_id"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-sm font-medium">Role</FormLabel>
-                      <Select 
-                        onValueChange={(value) => field.onChange(parseInt(value))}
-                        defaultValue={field.value?.toString()}
-                      >
-                        <FormControl>
-                          <SelectTrigger className="mt-1">
-                            <SelectValue placeholder="Select a role" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="1">Admin</SelectItem>
-                          <SelectItem value="2">Location Manager</SelectItem>
-                          <SelectItem value="3">Salesperson</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormDescription className="text-xs text-gray-500">
-                        Select the user's role
-                      </FormDescription>
-                      <FormMessage className="text-xs text-red-500" />
-                    </FormItem>
-                  )}
-                />
-
-                {/* Location Field */}
-                <FormField
-                  control={form.control}
-                  name="location_id"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-sm font-medium">Location</FormLabel>
-                      <Select 
-                        onValueChange={(value) => field.onChange(Number(value))}
-                        defaultValue={field.value?.toString()}
-                        disabled={isLoadingLocations}
-                      >
-                        <FormControl>
-                          <SelectTrigger className="mt-1">
-                            <SelectValue 
-                              placeholder={isLoadingLocations ? "Loading locations..." : "Select a location"} 
-                            />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {locations.map((location) => (
-                            <SelectItem 
-                              key={location.location_id} 
-                              value={location.location_id.toString()}
-                            >
-                              {location.location_name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormDescription className="text-xs text-gray-500">
-                        Select the user's location
-                      </FormDescription>
-                      <FormMessage className="text-xs text-red-500" />
-                    </FormItem>
-                  )}
-                />
-
-                <Button 
-                  type="submit" 
-                  className="w-full"
-                  disabled={isLoading || isLoadingLocations}
-                >
-                  {isLoading ? (
-                    <>
-                      <svg
-                        className="mr-2 h-4 w-4 animate-spin"
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                      >
-                        <circle
-                          className="opacity-25"
-                          cx="12"
-                          cy="12"
-                          r="10"
-                          stroke="currentColor"
-                          strokeWidth="4"
-                        />
-                        <path
-                          className="opacity-75"
-                          fill="currentColor"
-                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                        />
-                      </svg>
-                      Registering...
-                    </>
-                  ) : (
-                    'Register User'
-                  )}
-                </Button>
-              </form>
-            </Form>
+        {/* Form Section - Shows below carousel on mobile */}
+        <div className="order-2 md:order-1 space-y-6">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold dark:text-white text-black">
+              Create New User
+            </h1>
+            <p className="text-sm sm:text-base text-muted-foreground mt-2">
+              Add a new user to your organization
+            </p>
           </div>
+
+          {error && (
+            <div className="rounded-lg bg-destructive/15 text-destructive px-4 py-3 text-sm">
+              {error}
+            </div>
+          )}
+
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+              {/* Name Field */}
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium">Name</FormLabel>
+                    <FormControl>
+                      <Input 
+                        placeholder="Enter name" 
+                        className="mt-1"
+                        {...field} 
+                      />
+                    </FormControl>
+                    <FormDescription className="text-xs text-gray-500">
+                      Enter the user's full name
+                    </FormDescription>
+                    <FormMessage className="text-xs text-red-500" />
+                  </FormItem>
+                )}
+              />
+
+              {/* Email Field */}
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium">Email</FormLabel>
+                    <FormControl>
+                      <Input 
+                        type="email" 
+                        placeholder="Enter email"
+                        className="mt-1" 
+                        autoComplete="off"
+                        {...field} 
+                        value={field.value || ''}
+                      />
+                    </FormControl>
+                    <FormDescription className="text-xs text-gray-500">
+                      Enter a valid email address
+                    </FormDescription>
+                    <FormMessage className="text-xs text-red-500" />
+                  </FormItem>
+                )}
+              />
+
+              {/* Password Field */}
+              <FormField
+                control={form.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium">Password</FormLabel>
+                    <FormControl>
+                      <Input 
+                        type="password" 
+                        placeholder="Enter password"
+                        className="mt-1" 
+                        autoComplete="new-password"
+                        {...field} 
+                        value={field.value || ''}
+                      />
+                    </FormControl>
+                    <FormDescription className="text-xs text-gray-500">
+                      Password must be at least 6 characters
+                    </FormDescription>
+                    <FormMessage className="text-xs text-red-500" />
+                  </FormItem>
+                )}
+              />
+
+              {/* Role Field */}
+              <FormField
+                control={form.control}
+                name="role_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium">Role</FormLabel>
+                    <Select 
+                      onValueChange={(value) => field.onChange(Number(value))}
+                      defaultValue={field.value?.toString()}
+                    >
+                      <FormControl>
+                        <SelectTrigger className="mt-1">
+                          <SelectValue placeholder="Select a role" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="1">Admin</SelectItem>
+                        <SelectItem value="2">Location Manager</SelectItem>
+                        <SelectItem value="3">Salesperson</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormDescription className="text-xs text-gray-500">
+                      Select the user's role
+                    </FormDescription>
+                    <FormMessage className="text-xs text-red-500" />
+                  </FormItem>
+                )}
+              />
+
+              {/* Location Field */}
+              <FormField
+                control={form.control}
+                name="location_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium">Location</FormLabel>
+                    <Select 
+                      onValueChange={(value) => field.onChange(Number(value))}
+                      defaultValue={field.value?.toString()}
+                      disabled={isLoadingLocations}
+                    >
+                      <FormControl>
+                        <SelectTrigger className="mt-1">
+                          <SelectValue 
+                            placeholder={isLoadingLocations ? "Loading locations..." : "Select a location"} 
+                          />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {locations.map((location) => (
+                          <SelectItem 
+                            key={location.location_id} 
+                            value={location.location_id.toString()}
+                          >
+                            {location.location_name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormDescription className="text-xs text-gray-500">
+                      Select the user's location
+                    </FormDescription>
+                    <FormMessage className="text-xs text-red-500" />
+                  </FormItem>
+                )}
+              />
+
+              <Button 
+                type="submit" 
+                className="w-full"
+                disabled={isLoading || isLoadingLocations}
+              >
+                {isLoading ? (
+                  <>
+                    <svg
+                      className="mr-2 h-4 w-4 animate-spin"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      />
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      />
+                    </svg>
+                    Registering...
+                  </>
+                ) : (
+                  'Register User'
+                )}
+              </Button>
+            </form>
+          </Form>
         </div>
       </div>
     </div>
