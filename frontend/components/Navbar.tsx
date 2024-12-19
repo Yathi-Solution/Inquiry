@@ -40,8 +40,8 @@ export default function Navbar() {
     setMounted(true);
   }, []);
 
-  // Don't show navbar on login or register pages
-  if (pathname === '/login' || pathname === '/register') return null;
+  // Don't show navbar only on login page
+  if (pathname === '/login') return null;
   if (!mounted) return null;
 
   const handleLogout = () => {
