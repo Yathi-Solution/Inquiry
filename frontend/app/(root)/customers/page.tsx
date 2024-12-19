@@ -12,7 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { GET_CUSTOMERS, GET_ALL_USERS, UPDATE_CUSTOMER } from "@/graphql/queries";
+import { GET_CUSTOMERS, GET_ALL_USERS, UPDATE_CUSTOMER, GET_ALL_LOCATIONS } from "@/graphql/queries";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -44,6 +44,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Pencil } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Location } from "@/graphql/queries";
 
 interface CustomersResponse {
   getCustomers: Customer[];
@@ -65,12 +66,19 @@ interface CustomerDetails {
   name: string;
   email: string;
   phone: string;
-  visit_date: Date;
+  visit_date: Date | string;
   status: string;
   notes?: string;
-  created_at: Date;
+  created_at: Date | string;
   salesperson_id: number;
   location_id: number;
+}
+
+interface LocationsResponse {
+  locations: {
+    location_id: number;
+    location_name: string;
+  }[];
 }
 
 export default function CustomersPage() {
@@ -82,6 +90,7 @@ export default function CustomersPage() {
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerDetails | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<CustomerDetails | null>(null);
+  const [locations, setLocations] = useState<Location[]>([]);
 
   useEffect(() => {
     const savedToken = localStorage.getItem('token');
@@ -129,6 +138,18 @@ export default function CustomersPage() {
         setSalespeople(salespeopleList);
       }
 
+      if (user.roles?.role_name.toLowerCase() === 'super-admin') {
+        const locationsResponse = await request<LocationsResponse>(
+          process.env.NEXT_PUBLIC_GRAPHQL_ENDPOINT!,
+          GET_ALL_LOCATIONS,
+          {},
+          {
+            Authorization: `Bearer ${token}`,
+          }
+        );
+        setLocations(locationsResponse.locations);
+      }
+
       setCustomers(customersResponse.getCustomers);
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -151,25 +172,30 @@ export default function CustomersPage() {
     if (!editingCustomer || !token) return;
     
     try {
-      const formattedInput = {
-        ...editingCustomer,
-        visit_date: format(new Date(editingCustomer.visit_date), 'yyyy-MM-dd HH:mm:ss.SSS'),
-      };
-
       await request(
         process.env.NEXT_PUBLIC_GRAPHQL_ENDPOINT!,
         UPDATE_CUSTOMER,
         {
-          updateCustomerInput: formattedInput
+          customerId: editingCustomer.customer_id,
+          updateData: {
+            name: editingCustomer.name,
+            email: editingCustomer.email,
+            phone: editingCustomer.phone,
+            visit_date: format(new Date(editingCustomer.visit_date), 'yyyy-MM-dd HH:mm:ss.SSS'),
+            status: editingCustomer.status,
+            notes: editingCustomer.notes,
+            location_id: editingCustomer.location_id,
+            salesperson_id: editingCustomer.salesperson_id
+          }
         },
         {
           Authorization: `Bearer ${token}`,
         }
       );
       
-      toast.success("Customer updated successfully");
+      await fetchData();
       setIsEditing(false);
-      fetchData();
+      toast.success("Customer updated successfully");
     } catch (error) {
       console.error('Error updating customer:', error);
       toast.error("Failed to update customer");
@@ -259,8 +285,8 @@ export default function CustomersPage() {
                 <TableCell>
                   <Badge variant={
                     customer.status === 'pending' ? 'default' :
-                    customer.status === 'completed' ? 'secondary' :
                     customer.status === 'ongoing' ? 'primary' :
+                    customer.status === 'completed' ? 'secondary' :
                     customer.status === 'cancelled' ? 'destructive' :
                     'outline'
                   }>

@@ -7,6 +7,10 @@ export interface User {
   email: string;
   role_id: string;
   location_id: string;
+  role_name: string;
+  roles?: {
+    role_name: string;
+  };
 }
 
 export interface UpdateUserInput {
@@ -26,7 +30,7 @@ export interface FilterUserInput {
 
 // Add interface for Location
 export interface Location {
-  location_id: string;
+  location_id: number;
   location_name: string;
 }
 
@@ -375,12 +379,6 @@ export const UPDATE_CUSTOMER = gql`
       notes
       created_at
       updated_at
-      users {
-        name
-      }
-      locations {
-        location_name
-      }
     }
   }
 `;

@@ -1,0 +1,26 @@
+{
+  "name": "inquiry",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": ["frontend", "server"],
+  "description": "A Sales Management System with PostgreSQL and Prisma, featuring role-based access control, user management, activity tracking, and location assignments.",
+  "main": "index.js",
+  "scripts": {
+    "install:all": "npm install --workspaces",  
+    "build:all": "npm run build --workspaces", 
+    "dev:frontend": "npm run dev --workspace=frontend",  
+    "dev:server": "npm run dev --workspace=server",     
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Yathi-Solution/Inquiry.git"
+  },
+  "keywords": ["sales", "management", "PostgreSQL", "Prisma", "role-based access"],
+  "author": "Your Name <your.email@example.com>",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Yathi-Solution/Inquiry/issues"
+  },
+  "homepage": "https://github.com/Yathi-Solution/Inquiry#readme"
+}
