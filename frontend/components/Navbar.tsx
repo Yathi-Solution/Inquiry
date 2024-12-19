@@ -15,11 +15,11 @@ import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 
-// Define roles
+// Define roles with exact values from your database
 const ROLES = {
-  SUPER_ADMIN: 1,
-  LOCATION_MANAGER: 2,
-  SALESPERSON: 3
+  SUPER_ADMIN: 1,        // matches "super-admin"
+  LOCATION_MANAGER: 2,   // matches "location-manager"
+  SALESPERSON: 3         // matches "salesperson"
 };
 
 interface NavItem {
@@ -27,11 +27,13 @@ interface NavItem {
   label: string;
   isButton?: boolean;
   onClick?: () => void;
+  requiredRoles?: number[];
+  icon?: string;
 }
 
 export default function Navbar() {
   const { theme, setTheme } = useTheme();
-  const { user, logout } = useAuth();
+  const { user, token, logout } = useAuth();
   const [mounted, setMounted] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
@@ -40,55 +42,38 @@ export default function Navbar() {
     setMounted(true);
   }, []);
 
+  // Don't show navbar on login or register pages
+  if (pathname === '/login' || pathname === '/register') return null;
   if (!mounted) return null;
+
+  const handleLogout = () => {
+    logout();
+    router.push('/login');
+  };
+
+  const navItems = [
+    ...(user ? [
+      { href: "/dashboard", label: "Dashboard" },
+      { href: "/customers", label: "Customers" },
+      ...(user.role_id <= 2 ? [{ href: "/users", label: "Users" }] : []),
+      {
+        href: "#",
+        label: "Logout",
+        isButton: true,
+        onClick: handleLogout
+      }
+    ] : [
+      {
+        href: "/login",
+        label: "Login",
+        isButton: true
+      }
+    ])
+  ];
 
   const toggleTheme = () => {
     setTheme(theme === 'dark' ? 'light' : 'dark');
   };
-
-  // Define navigation items based on user role
-  const getNavItems = (): NavItem[] => {
-    const items: NavItem[] = [];
-
-    if (user) {
-      console.log("Current user:", user);
-      
-      // Common items for all authenticated users
-      items.push({ href: "/profile", label: "Profile" });
-
-      // Check if user is super admin (you might need to adjust this condition based on your user object)
-      if (user.name.includes('SuperAdmin')) {  // Temporary solution based on name
-        console.log("Is super admin");
-        items.push(
-          { href: "/dashboard", label: "Dashboard" },
-          { href: "/register", label: "Register" }
-        );
-      }
-
-      // Add logout button
-      items.push({
-        href: "#",
-        label: "Logout",
-        isButton: true,
-        onClick: () => {
-          logout();
-          router.push('/login');
-        }
-      });
-    } else {
-      items.push({ 
-        href: "/login", 
-        label: "Sign In", 
-        isButton: true,
-        onClick: () => router.push('/login')
-      });
-    }
-
-    console.log("Final nav items:", items);
-    return items;
-  };
-
-  const navItems = getNavItems();
 
   // Add this helper function
   const isActive = (href: string) => {

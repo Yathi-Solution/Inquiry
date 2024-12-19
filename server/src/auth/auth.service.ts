@@ -14,41 +14,68 @@ export class AuthService {
   ) {}
 
   async validateUser(email: string, password: string): Promise<any> {
-    const user = await this.prisma.users.findUnique({
-      where: { email },
-      include: { roles: true, locations: true }
-    });
+    try {
+      const user = await this.prisma.users.findUnique({
+        where: { email },
+        include: { roles: true, locations: true }
+      });
 
-    if (user && await bcrypt.compare(password, user.password)) {
+      // User doesn't exist
+      if (!user) {
+        return {
+          success: false,
+          message: "User does not exist"
+        };
+      }
+
+      // Check password
+      const isPasswordValid = await bcrypt.compare(password, user.password);
+      if (!isPasswordValid) {
+        await this.activityLogsService.createLog(user.user_id, {
+          activity: `Failed login attempt - ${user.email} (Invalid password)`,
+          log_type: 'AUTH'
+        });
+        
+        return {
+          success: false,
+          message: "Invalid credentials"
+        };
+      }
+
+      // Successful login
       await this.activityLogsService.createLog(user.user_id, {
         activity: `Successful login - ${user.email} (${user.roles.role_name})`,
         log_type: 'AUTH'
       });
-      return user;
-    }
 
-    // Log failed attempt
-    if (user) {
-      await this.activityLogsService.createLog(user.user_id, {
-        activity: `Failed login attempt - ${user.email} (Invalid password)`,
-        log_type: 'AUTH'
-      });
-    } else {
-      // Generic log for non-existent user
-      await this.activityLogsService.createLog(0, {
-        activity: `Failed login attempt - ${email} (User not found)`,
-        log_type: 'AUTH'
-      });
+      return {
+        success: true,
+        user
+      };
+    } catch (error) {
+      console.error('Login error:', error);
+      return {
+        success: false,
+        message: "An error occurred during login"
+      };
     }
-    
-    return null;
   }
 
   async login(user: any) {
-    const payload = { email: user.email, sub: user.user_id };
+    if (!user.success) {
+      throw new UnauthorizedException(user.message);
+    }
+
+    const payload = { 
+      email: user.user.email, 
+      sub: user.user.user_id, 
+      role_id: user.user.role_id, 
+      location_id: user.user.location_id 
+    };
+
     return {
       access_token: this.jwtService.sign(payload),
-      user,
+      user: user.user,
     };
   }
 

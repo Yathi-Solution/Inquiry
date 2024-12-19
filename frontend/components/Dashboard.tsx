@@ -45,6 +45,7 @@ import {
   SheetTrigger,
   SheetClose,
 } from "@/components/ui/sheet";
+import { useRouter } from 'next/navigation';
 
 const graphqlEndpoint = process.env.NEXT_PUBLIC_GRAPHQL_ENDPOINT!;
 
@@ -64,8 +65,35 @@ interface EditingUser {
   };
 }
 
+interface User {
+  user_id: number;
+  name: string;
+  email: string;
+  role_id: number;
+  location_id: number;
+  roles: {
+    role_id: number;
+    role_name: string;
+  };
+  locations: {
+    location_id: number;
+    location_name: string;
+  };
+}
+
+interface QueryResponse {
+  users: User[];
+}
+
+interface GraphQLError extends Error {
+  response?: {
+    errors?: Array<{ message: string }>;
+  };
+}
+
 export default function Dashboard() {
-  const { token } = useAuth();
+  const { token, user, logout } = useAuth();
+  const router = useRouter();
   const queryClient = useQueryClient();
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const [locationFilter, setLocationFilter] = useState<string>('all');
@@ -79,75 +107,13 @@ export default function Dashboard() {
   const [selectedRow, setSelectedRow] = useState<any>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
 
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['users'],
-    queryFn: async () => {
-      const response = await request(
-        graphqlEndpoint,
-        GET_ALL_USERS,
-        {},
-        { Authorization: `Bearer ${token}` }
-      );
-      return (response as { users: any[] }).users;
-    },
-    enabled: !!token
-  });
-
-  const uniqueRoles = useMemo(() => {
-    if (!data) return [];
-    const rolesMap = new Map();
-    data.forEach(user => {
-      if (user.role && !rolesMap.has(user.role.role_id)) {
-        rolesMap.set(user.role.role_id, {
-          role_id: user.role.role_id,
-          role_name: user.role.role_name
-        });
-      }
-    });
-    return Array.from(rolesMap.values());
-  }, [data]);
-
-  const uniqueLocations = useMemo(() => {
-    if (!data) return [];
-    const locationsMap = new Map();
-    data.forEach(user => {
-      if (user.location && !locationsMap.has(user.location.location_id)) {
-        locationsMap.set(user.location.location_id, {
-          location_id: user.location.location_id,
-          location_name: user.location.location_name
-        });
-      }
-    });
-    return Array.from(locationsMap.values());
-  }, [data]);
-
   useEffect(() => {
-    if (editingUser) {
-      console.log('Editing User:', editingUser);
-      console.log('Unique Roles:', uniqueRoles);
-      console.log('Unique Locations:', uniqueLocations);
+    if (!token) {
+      router.push('/login');
     }
-  }, [editingUser, uniqueRoles, uniqueLocations]);
+  }, [token, router]);
 
-  const filteredData = useMemo(() => {
-    if (!data) return [];
-    return data.filter(user => {
-      const matchesRole = 
-        roleFilter === 'all' || 
-        user.role?.role_id?.toString() === roleFilter;
-      
-      const matchesLocation = 
-        locationFilter === 'all' || 
-        user.location?.location_id?.toString() === locationFilter;
-      
-      const matchesName = 
-        user.name?.toLowerCase().includes(nameFilter.toLowerCase());
-      
-      return matchesRole && matchesLocation && matchesName;
-    });
-  }, [data, roleFilter, locationFilter, nameFilter]);
-
-  const columns = useMemo<ColumnDef<any>[]>(() => [
+  const columns = useMemo<ColumnDef<User>[]>(() => [
     {
       id: "select",
       header: ({ table }) => (
@@ -193,38 +159,129 @@ export default function Dashboard() {
     {
       id: "role",
       header: "Role",
-      accessorFn: (row) => row.role.role_name,
+      accessorFn: (row) => row?.roles?.role_name || 'N/A',
     },
     {
       id: "location",
       header: "Location",
-      accessorFn: (row) => row.location.location_name,
+      accessorFn: (row) => row?.locations?.location_name || 'N/A',
     },
     {
       id: "actions",
       header: "Actions",
-      cell: ({ row }) => (
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => {
-            const user = row.original;
-            setEditingUser({
-              ...user,
-              role_id: user.role.role_id,
-              location_id: user.location.location_id,
-              role: user.role,
-              location: user.location
-            });
-            setSelectedRow(row);
-            setSheetOpen(true);
-          }}
-        >
-          <Pencil className="h-4 w-4" />
-        </Button>
-      )
+      cell: ({ row }) => {
+        const user = row.original;
+        return (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => {
+              if (!user?.roles || !user?.locations) return;
+              
+              setEditingUser({
+                ...user,
+                role_id: user.roles.role_id,
+                location_id: user.locations.location_id,
+                role: user.roles,
+                location: user.locations
+              });
+              setSelectedRow(row);
+              setSheetOpen(true);
+            }}
+          >
+            <Pencil className="h-4 w-4" />
+          </Button>
+        );
+      }
     },
-  ], [uniqueRoles, uniqueLocations, editingUser]);
+  ], []);
+
+  const { data, isLoading, error } = useQuery<User[]>({
+    queryKey: ['users'],
+    queryFn: async () => {
+      if (!token) throw new Error('No token available');
+      
+      try {
+        const response = await request<QueryResponse>(
+          graphqlEndpoint,
+          GET_ALL_USERS,
+          {},
+          {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          }
+        );
+        console.log('GraphQL Response:', response);
+        return response.users;
+      } catch (err) {
+        console.error('GraphQL Error:', err);
+        throw err;
+      }
+    },
+    enabled: !!token,
+    retry: 1
+  });
+
+  useEffect(() => {
+    const graphqlError = error as { response?: { errors?: { message: string }[] } };
+    if (graphqlError?.response?.errors?.[0]?.message === 'Unauthorized') {
+      logout();
+    }
+  }, [error, logout]);
+
+  const uniqueRoles = useMemo(() => {
+    if (!data) return [];
+    const rolesMap = new Map();
+    data.forEach((user: User) => {
+      if (user.roles && !rolesMap.has(user.roles.role_id)) {
+        rolesMap.set(user.roles.role_id, {
+          role_id: user.roles.role_id,
+          role_name: user.roles.role_name
+        });
+      }
+    });
+    return Array.from(rolesMap.values());
+  }, [data]);
+
+  const uniqueLocations = useMemo(() => {
+    if (!data) return [];
+    const locationsMap = new Map();
+    data.forEach((user: User) => {
+      if (user.locations && !locationsMap.has(user.locations.location_id)) {
+        locationsMap.set(user.locations.location_id, {
+          location_id: user.locations.location_id,
+          location_name: user.locations.location_name
+        });
+      }
+    });
+    return Array.from(locationsMap.values());
+  }, [data]);
+
+  useEffect(() => {
+    if (editingUser) {
+      console.log('Editing User:', editingUser);
+      console.log('Unique Roles:', uniqueRoles);
+      console.log('Unique Locations:', uniqueLocations);
+    }
+  }, [editingUser, uniqueRoles, uniqueLocations]);
+
+  const filteredData = useMemo(() => {
+    if (!data) return [];
+    return data.filter((user: User) => {
+      const matchesRole = 
+        roleFilter === 'all' || 
+        user.roles?.role_id?.toString() === roleFilter;
+      
+      const matchesLocation = 
+        locationFilter === 'all' || 
+        user.locations?.location_id?.toString() === locationFilter;
+      
+      const matchesName = 
+        user.name?.toLowerCase().includes(nameFilter.toLowerCase());
+      
+      return matchesRole && matchesLocation && matchesName;
+    });
+  }, [data, roleFilter, locationFilter, nameFilter]);
 
   const table = useReactTable({
     data: filteredData,

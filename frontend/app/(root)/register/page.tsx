@@ -28,15 +28,19 @@ import {
   CarouselPrevious,
 } from "@/components/ui/carousel"
 import useEmblaCarousel from "embla-carousel-react";
-import Autoplay from "embla-carousel-autoplay"
+import Autoplay from "embla-carousel-autoplay";
+import { request } from 'graphql-request';
+import { toast } from 'sonner';
+import { CREATE_USER } from "@/graphql/queries";
+import { GET_LOCATIONS } from '@/graphql/queries';
 
 // Define the form schema
 const formSchema = z.object({
-  name: z.string().min(1, 'Name is required'),
-  email: z.string().email('Invalid email').min(1, 'Email is required'),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
-  role_id: z.number({ required_error: 'Role is required' }),
-  location_id: z.number({ required_error: 'Location is required' }),
+  name: z.string().min(2, "Name must be at least 2 characters"),
+  email: z.string().email("Invalid email address"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+  role_id: z.number({ required_error: "Role is required" }),
+  location_id: z.number({ required_error: "Location is required" })
 });
 
 // Define the form type
@@ -53,15 +57,38 @@ interface Location {
   location_name: string;
 }
 
+interface CreateUserResponse {
+  createUser: {
+    user_id: number;
+    name: string;
+    email: string;
+    role_id: number;
+    location_id: number;
+  }
+}
+
+interface LocationsResponse {
+  locations: Location[];
+}
+
+const ROLES = {
+  SUPER_ADMIN: 1,
+  LOCATION_MANAGER: 2,
+  SALESPERSON: 3,
+};
+
 export default function Register() {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingLocations, setIsLoadingLocations] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { data: locations = [], isLoading: isLoadingLocations } = useLocations();
+  const [locations, setLocations] = useState<Location[]>([]);
   const [mounted, setMounted] = useState(false);
   const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true });
   const [selectedIndex, setSelectedIndex] = useState(0);
+
+  console.log("Register page - Current user:", user); // Debug log
 
   // Handle mounting state
   useEffect(() => {
@@ -81,6 +108,29 @@ export default function Register() {
       };
     }
   }, [emblaApi]);
+
+  // Fetch locations
+  useEffect(() => {
+    const fetchLocations = async () => {
+      setIsLoadingLocations(true);
+      try {
+        const response = await request<LocationsResponse>(
+          process.env.NEXT_PUBLIC_GRAPHQL_ENDPOINT!,
+          GET_LOCATIONS,
+          {},
+          { Authorization: `Bearer ${token}` }
+        );
+        setLocations(response.locations);
+      } catch (error) {
+        console.error('Error fetching locations:', error);
+        toast.error('Failed to load locations');
+      } finally {
+        setIsLoadingLocations(false);
+      }
+    };
+
+    if (token) fetchLocations();
+  }, [token]);
 
   const slides = [
     {
@@ -130,60 +180,85 @@ export default function Register() {
   }, [form, user, mounted]);
 
   // Check for authentication before form render
-  React.useEffect(() => {
-    if (mounted && !user) {
+  useEffect(() => {
+    if (!token || !user) {
+      console.log("No token or user, redirecting to login");
       router.push('/login');
       return;
     }
     
-    if (mounted && !user?.name?.includes('SuperAdmin')) {
-      router.push('/dashboard');
+    // Simplified role check
+    const allowedRoles = [ROLES.SUPER_ADMIN, ROLES.LOCATION_MANAGER];
+    if (!allowedRoles.includes(user.role_id)) {
+      console.log("Unauthorized role:", user.role_id);
+      router.push('/unauthorized');
+      return;
     }
-  }, [user, router, mounted]);
+  }, [token, user, router]);
+
+  // Simplified loading check
+  if (!user || !token) {
+    return <div>Loading...</div>;
+  }
+
+  // Simplified role check for render
+  const allowedRoles = [ROLES.SUPER_ADMIN, ROLES.LOCATION_MANAGER];
+  if (!allowedRoles.includes(user.role_id)) {
+    return null;
+  }
 
   // Don't render anything until mounted
   if (!mounted) {
     return null;
   }
 
-  // Show loading state while checking authentication
-  if (!user) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div>Loading...</div>
-      </div>
-    );
-  }
-
-  // Show access denied message
-  if (!user.name?.includes('SuperAdmin')) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <p className="text-red-500">Access Denied. Only Super Admins can register new users.</p>
-      </div>
-    );
-  }
-
-  const onSubmit = async (data: FormValues) => {
+  const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
-      setIsLoading(true);
-      setError(null);
-      
-      const result = await registerUser({
-        name: data.name,
-        email: data.email,
-        password: data.password,
-        role_id: data.role_id,
-        location_id: data.location_id
+      // Debug log the values being sent
+      console.log('Sending registration data:', {
+        name: values.name,
+        email: values.email,
+        role_id: Number(values.role_id),
+        location_id: Number(values.location_id)
       });
 
-      console.log('Registration successful:', result);
-      router.push('/dashboard');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Registration failed');
-      console.error('Registration error:', err);
-    } finally {
-      setIsLoading(false);
+      const response = await request<CreateUserResponse>(
+        process.env.NEXT_PUBLIC_GRAPHQL_ENDPOINT!,
+        CREATE_USER,
+        {
+          input: {
+            name: values.name,
+            email: values.email,
+            password: values.password,
+            role_id: Number(values.role_id),
+            location_id: Number(values.location_id)
+          }
+        },
+        {
+          Authorization: `Bearer ${token}`,
+        }
+      );
+
+      if (response.createUser) {
+        toast.success("User registered successfully!");
+        form.reset();
+        router.push('/dashboard');
+      }
+    } catch (error: any) {
+      // More detailed error logging
+      console.error('Registration error details:', {
+        error: error?.response?.errors,
+        status: error?.response?.status,
+        message: error?.message
+      });
+      
+      // Show specific error message
+      const errorMessage = 
+        error?.response?.errors?.[0]?.message || 
+        error?.message || 
+        "Failed to register user. Please check if the location exists and email is unique.";
+      
+      toast.error(errorMessage);
     }
   };
 
@@ -399,7 +474,7 @@ export default function Register() {
                     <FormItem>
                       <FormLabel className="text-sm font-medium">Location</FormLabel>
                       <Select 
-                        onValueChange={(value) => field.onChange(parseInt(value))}
+                        onValueChange={(value) => field.onChange(Number(value))}
                         defaultValue={field.value?.toString()}
                         disabled={isLoadingLocations}
                       >
@@ -411,7 +486,7 @@ export default function Register() {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {locations.map((location: Location) => (
+                          {locations.map((location) => (
                             <SelectItem 
                               key={location.location_id} 
                               value={location.location_id.toString()}

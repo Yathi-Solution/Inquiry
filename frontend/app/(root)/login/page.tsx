@@ -1,128 +1,132 @@
 "use client";
 
+import { useState } from "react";
+import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm, FormProvider } from "react-hook-form";
-import { z } from "zod";
-import { loginUser } from '@/api/auth';
-import { useAuth } from '@/context/AuthContext';
-import { useRouter } from 'next/navigation';
+import * as z from "zod";
+import { request } from 'graphql-request';
+import { useAuth } from "@/context/AuthContext";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { useState } from 'react';
+import { LOGIN } from '@/graphql/queries';
 
-const formSchema = z.object({
-  email: z.string().email('Invalid email').min(1, 'Email is required'),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
+const loginSchema = z.object({
+  email: z.string().email("Invalid email address"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
 });
 
-const Login = () => {
+export default function LoginPage() {
+  const { login } = useAuth();
+  const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  
-  const methods = useForm({
-    resolver: zodResolver(formSchema),
+
+  const form = useForm<z.infer<typeof loginSchema>>({
+    resolver: zodResolver(loginSchema),
     defaultValues: {
       email: "",
       password: "",
     },
   });
 
-  const { handleSubmit, formState: { errors }, reset } = methods;
-  const router = useRouter();
-  const { login } = useAuth();
-
-  const onSubmit = async (data: any) => {
+  const onSubmit = async (values: z.infer<typeof loginSchema>) => {
     try {
       setIsLoading(true);
       setError(null);
-      const userData = await loginUser(data.email, data.password);
-      login(userData);
-      router.push('/dashboard');
-    } catch (error: any) {
-      console.error('Login error:', error);
-      if (error.response?.status === 401) {
-        setError("Invalid email or password");
-      } else if (error.response?.data?.message) {
-        setError(error.response.data.message);
-      } else {
-        setError("An error occurred. Please try again.");
+
+      const response = await request<any>(
+        process.env.NEXT_PUBLIC_GRAPHQL_ENDPOINT!,
+        LOGIN,
+        {
+          email: values.email,
+          password: values.password
+        }
+      );
+
+      if (response.login?.access_token) {
+        login(response.login);
+        router.push("/dashboard");
       }
-      // Clear password field on error
-      reset({ 
-        ...data, 
-        password: "" 
-      });
+    } catch (error: any) {
+      console.error("Login error:", error);
+      setError(error.response?.errors?.[0]?.message || "An error occurred during login");
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <FormProvider {...methods}>
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+    <div className="flex min-h-screen items-center justify-center">
+      <div className="w-full max-w-md space-y-8 p-8 bg-white rounded-lg shadow-lg">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold">Sign in to your account</h2>
+        </div>
+
         {error && (
           <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-lg">
             {error}
           </div>
         )}
-        
-        <FormField
-          control={methods.control}
-          name="email"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Email</FormLabel>
-              <FormControl>
-                <Input 
-                  {...field} 
-                  placeholder="Enter your email" 
-                  type="email"
-                  autoComplete="off"
-                />
-              </FormControl>
-              <FormDescription>Your email address</FormDescription>
-              <FormMessage>{errors.email ? (errors.email.message as string) : null}</FormMessage>
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={methods.control}
-          name="password"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Password</FormLabel>
-              <FormControl>
-                <Input 
-                  {...field} 
-                  type="password" 
-                  placeholder="Enter your password"
-                  autoComplete="new-password"
-                />
-              </FormControl>
-              <FormDescription>Your password</FormDescription>
-              <FormMessage>{errors.password ? (errors.password.message as string) : null}</FormMessage>
-            </FormItem>
-          )}
-        />
-        <Button 
-          type="submit" 
-          className="w-full"
-          disabled={isLoading}
-        >
-          {isLoading ? "Logging in..." : "Login"}
-        </Button>
-      </form>
-    </FormProvider>
-  );
-};
 
-export default Login;
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <FormField
+              control={form.control}
+              name="email"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Email</FormLabel>
+                  <FormControl>
+                    <Input
+                      {...field}
+                      type="email"
+                      placeholder="Enter your email"
+                      autoComplete="off"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="password"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Password</FormLabel>
+                  <FormControl>
+                    <Input
+                      {...field}
+                      type="password"
+                      placeholder="Enter your password"
+                      autoComplete="new-password"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={isLoading}
+            >
+              {isLoading ? "Signing in..." : "Sign in"}
+            </Button>
+          </form>
+        </Form>
+      </div>
+    </div>
+  );
+}
