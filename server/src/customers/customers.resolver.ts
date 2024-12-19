@@ -12,6 +12,8 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { GraphQLError } from 'graphql';
 import { PrismaService } from '../prisma-services/prisma.service';
 import { Int } from '@nestjs/graphql';
+import { ActivityLog } from 'src/activity-logs/models/activity-log.model';
+import { UpdateCustomerInput } from './dto/update-customer.dto';
 
 @Resolver(() => CustomerDto)
 export class CustomersResolver {
@@ -131,5 +133,44 @@ export class CustomersResolver {
         extensions: { code: 'CREATE_CUSTOMER_ERROR' },
       });
     }
+  }
+
+  @Query(() => [ActivityLog])
+  @UseGuards(JwtAuthGuard)
+  async getCustomerLogs(
+    @Args('customerId', { type: () => Int }) customerId: number,
+    @CurrentUser() currentUser: any
+  ) {
+    return this.customersService.getCustomerLogs(customerId, currentUser);
+  }
+
+  @Mutation(() => CustomerDto)
+  @UseGuards(JwtAuthGuard)
+  async updateCustomer(
+    @Args('customerId', { type: () => Int }) customerId: number,
+    @Args('updateData') updateData: UpdateCustomerInput,
+    @CurrentUser() currentUser: any
+  ) {
+    return this.customersService.updateCustomer(customerId, updateData, currentUser);
+  }
+
+  @Mutation(() => CustomerDto)
+  @UseGuards(JwtAuthGuard)
+  async updateVisitDate(
+    @Args('customerId', { type: () => Int }) customerId: number,
+    @Args('newVisitDate') newVisitDate: Date,
+    @CurrentUser() currentUser: any
+  ) {
+    return this.customersService.updateVisitDate(customerId, newVisitDate, currentUser);
+  }
+
+  @Mutation(() => CustomerDto)
+  @UseGuards(JwtAuthGuard)
+  async reassignCustomer(
+    @Args('customerId', { type: () => Int }) customerId: number,
+    @Args('newSalespersonId', { type: () => Int }) newSalespersonId: number,
+    @CurrentUser() currentUser: any
+  ) {
+    return this.customersService.reassignCustomer(customerId, newSalespersonId, currentUser);
   }
 }

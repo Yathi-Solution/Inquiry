@@ -9,6 +9,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { ActivityLog } from '../activity-logs/models/activity-log.model';
 
 @Resolver(() => Assignment)
 @UseGuards(JwtAuthGuard)
@@ -20,27 +21,19 @@ export class SalespersonAssignmentsResolver {
   @Mutation(() => Assignment)
   async createAssignment(
     @Args('input') input: CreateAssignmentInput,
-    @CurrentUser() user: any
+    @CurrentUser() currentUser: any
   ) {
-    return this.salespersonAssignmentsService.createAssignment(
-      input,
-      user.user_id,
-      user.role_id
-    );
+    return this.salespersonAssignmentsService.createAssignment(input, currentUser);
   }
 
-  @UseGuards(RolesGuard)
-  @Roles(1, 2)
   @Mutation(() => Assignment)
+  @UseGuards(JwtAuthGuard)
   async updateAssignmentStatus(
-    @Args('input') input: UpdateAssignmentStatusInput,
-    @CurrentUser() user: any
+    @Args('assignmentId', { type: () => Int }) assignmentId: number,
+    @Args('active', { type: () => Boolean }) active: boolean,
+    @CurrentUser() currentUser: any
   ) {
-    return this.salespersonAssignmentsService.updateAssignmentStatus(
-      input,
-      user.user_id,
-      user.role_id
-    );
+    return this.salespersonAssignmentsService.updateAssignmentStatus(assignmentId, active, currentUser);
   }
 
   @UseGuards(RolesGuard)
@@ -90,5 +83,23 @@ export class SalespersonAssignmentsResolver {
     @Args('assignmentId', { type: () => Int }) assignmentId: number
   ) {
     return this.salespersonAssignmentsService.getAssignment(assignmentId);
+  }
+
+  @Mutation(() => Boolean)
+  @UseGuards(JwtAuthGuard)
+  async deleteAssignment(
+    @Args('assignmentId', { type: () => Int }) assignmentId: number,
+    @CurrentUser() currentUser: any
+  ) {
+    return this.salespersonAssignmentsService.deleteAssignment(assignmentId, currentUser);
+  }
+
+  @Query(() => [ActivityLog])
+  @UseGuards(JwtAuthGuard)
+  async getAssignmentLogs(
+    @Args('assignmentId', { type: () => Int }) assignmentId: number,
+    @CurrentUser() currentUser: any
+  ) {
+    return this.salespersonAssignmentsService.getAssignmentLogs(assignmentId, currentUser);
   }
 }

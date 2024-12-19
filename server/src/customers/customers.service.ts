@@ -1,13 +1,17 @@
 // src/customers/customers.service.ts
-import { Injectable, ForbiddenException } from '@nestjs/common';
+import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma-services/prisma.service';
 import { Prisma, customers } from '@prisma/client';
 import { CreateCustomerInput } from './dto/create-customer.dto';
 import { FilterCustomersInput } from './dto/filter-customers.dto';
+import { ActivityLogsService } from '../activity-logs/activity-logs.service';
 
 @Injectable()
 export class CustomersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly activityLogsService: ActivityLogsService
+  ) {}
 
   async getCustomers(
     userId: number, 
@@ -163,7 +167,7 @@ export class CustomersService {
         throw new ForbiddenException('You do not have permission to create a customer');
     }
 
-    return this.prisma.customers.create({
+    const customer = await this.prisma.customers.create({
       data: {
         name: customerData.name,
         email: customerData.email,
@@ -181,6 +185,13 @@ export class CustomersService {
         users: true,
       },
     });
+
+    await this.activityLogsService.createLog(user.user_id, {
+      activity: `Created new customer - ${customer.name} (assigned to ${customer.users.name} at ${customer.locations.location_name})`,
+      log_type: 'CUSTOMER'
+    });
+
+    return customer;
   }
 
   async getCustomersCount(
@@ -248,5 +259,193 @@ export class CustomersService {
     return this.prisma.customers.count({
       where: whereConditions
     });
+  }
+
+  async updateCustomerStatus(customerId: number, status: string, user: any) {
+    const oldCustomer = await this.prisma.customers.findUnique({
+      where: { customer_id: customerId },
+      include: { users: true, locations: true }
+    });
+
+    // Role-based validation
+    switch(user.role_name.toLowerCase()) {
+      case 'salesperson':
+        if (oldCustomer.salesperson_id !== user.user_id) {
+          throw new ForbiddenException('You can only update your own customers');
+        }
+        break;
+      case 'location-manager':
+        if (oldCustomer.location_id !== user.location_id) {
+          throw new ForbiddenException('You can only update customers in your location');
+        }
+        break;
+      case 'super-admin':
+        // Can update any customer
+        break;
+      default:
+        throw new ForbiddenException('Unauthorized');
+    }
+
+    const updatedCustomer = await this.prisma.customers.update({
+      where: { customer_id: customerId },
+      data: { status },
+      include: { users: true, locations: true }
+    });
+
+    await this.activityLogsService.createLog(user.user_id, {
+      activity: `Updated status for customer ${oldCustomer.name} from ${oldCustomer.status} to ${status}`,
+      log_type: 'CUSTOMER'
+    });
+
+    return updatedCustomer;
+  }
+
+  async getCustomerLogs(customerId: number, user: any) {
+    const customer = await this.prisma.customers.findUnique({
+      where: { customer_id: customerId },
+      include: { users: true }
+    });
+
+    if (!customer) {
+      throw new NotFoundException('Customer not found');
+    }
+
+    // Role-based access control for logs
+    const where: Prisma.activity_logsWhereInput = {
+      log_type: 'CUSTOMER'
+    };
+
+    switch(user.role_name.toLowerCase()) {
+      case 'super-admin':
+        // Can see all logs for this customer
+        break;
+      case 'location-manager':
+        if (customer.location_id !== user.location_id) {
+          throw new ForbiddenException('Cannot access logs for customers outside your location');
+        }
+        where.users = {
+          location_id: user.location_id
+        };
+        break;
+      case 'salesperson':
+        if (customer.salesperson_id !== user.user_id) {
+          throw new ForbiddenException('Cannot access logs for customers not assigned to you');
+        }
+        where.user_id = user.user_id;
+        break;
+      default:
+        throw new ForbiddenException('Unauthorized');
+    }
+
+    return this.activityLogsService.getLogs({
+      log_type: 'CUSTOMER',
+      customer_id: customerId
+    }, user);
+  }
+
+  async updateCustomer(customerId: number, updateData: any, user: any) {
+    const oldCustomer = await this.prisma.customers.findUnique({
+      where: { customer_id: customerId },
+      include: { users: true, locations: true }
+    });
+
+    // Role-based validation (reusing existing logic)
+    this.validateUserAccess(user, oldCustomer);
+
+    const updatedCustomer = await this.prisma.customers.update({
+      where: { customer_id: customerId },
+      data: updateData,
+      include: { users: true, locations: true }
+    });
+
+    // Log specific changes
+    const changes = [];
+    if (updateData.visit_date && updateData.visit_date !== oldCustomer.visit_date) {
+      changes.push(`visit date to ${new Date(updateData.visit_date).toLocaleDateString()}`);
+    }
+    if (updateData.salesperson_id && updateData.salesperson_id !== oldCustomer.salesperson_id) {
+      changes.push(`assigned salesperson from ${oldCustomer.users.name} to ${updatedCustomer.users.name}`);
+    }
+    if (updateData.notes && updateData.notes !== oldCustomer.notes) {
+      changes.push('notes');
+    }
+    if (updateData.phone && updateData.phone !== oldCustomer.phone) {
+      changes.push('contact information');
+    }
+
+    await this.activityLogsService.createLog(user.user_id, {
+      activity: `Updated customer ${oldCustomer.name}: ${changes.join(', ')}`,
+      log_type: 'CUSTOMER'
+    });
+
+    return updatedCustomer;
+  }
+
+  async updateVisitDate(customerId: number, newVisitDate: Date, user: any) {
+    const customer = await this.prisma.customers.findUnique({
+      where: { customer_id: customerId },
+      include: { users: true }
+    });
+
+    this.validateUserAccess(user, customer);
+
+    const updatedCustomer = await this.prisma.customers.update({
+      where: { customer_id: customerId },
+      data: { visit_date: newVisitDate },
+      include: { users: true }
+    });
+
+    await this.activityLogsService.createLog(user.user_id, {
+      activity: `Updated visit date for customer ${customer.name} to ${newVisitDate.toLocaleDateString()}`,
+      log_type: 'CUSTOMER'
+    });
+
+    return updatedCustomer;
+  }
+
+  async reassignCustomer(customerId: number, newSalespersonId: number, user: any) {
+    const customer = await this.prisma.customers.findUnique({
+      where: { customer_id: customerId },
+      include: { users: true }
+    });
+
+    const newSalesperson = await this.prisma.users.findUnique({
+      where: { user_id: newSalespersonId }
+    });
+
+    this.validateUserAccess(user, customer);
+
+    const updatedCustomer = await this.prisma.customers.update({
+      where: { customer_id: customerId },
+      data: { salesperson_id: newSalespersonId },
+      include: { users: true }
+    });
+
+    await this.activityLogsService.createLog(user.user_id, {
+      activity: `Reassigned customer ${customer.name} from ${customer.users.name} to ${newSalesperson.name}`,
+      log_type: 'CUSTOMER'
+    });
+
+    return updatedCustomer;
+  }
+
+  private validateUserAccess(user: any, customer: any) {
+    switch(user.role_name.toLowerCase()) {
+      case 'salesperson':
+        if (customer.salesperson_id !== user.user_id) {
+          throw new ForbiddenException('You can only modify your own customers');
+        }
+        break;
+      case 'location-manager':
+        if (customer.location_id !== user.location_id) {
+          throw new ForbiddenException('You can only modify customers in your location');
+        }
+        break;
+      case 'super-admin':
+        // Can modify any customer
+        break;
+      default:
+        throw new ForbiddenException('Unauthorized');
+    }
   }
 }

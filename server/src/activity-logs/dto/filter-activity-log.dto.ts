@@ -13,7 +13,7 @@ export class FilterActivityLogInput {
   @IsOptional()
   activity?: string;
 
-  @Field({ nullable: true })
+  @Field(() => String, { nullable: true })
   @IsOptional()
   log_type?: string;
 
@@ -26,4 +26,10 @@ export class FilterActivityLogInput {
   @IsDate()
   @IsOptional()
   end_date?: Date;
+
+  @Field(() => Int, { nullable: true })
+  customer_id?: number;
+
+  @Field(() => Int, { nullable: true })
+  assignment_id?: number;
 } 

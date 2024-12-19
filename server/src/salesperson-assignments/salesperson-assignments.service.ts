@@ -4,10 +4,14 @@ import { CreateAssignmentInput } from './dto/create-assignment.dto';
 import { UpdateAssignmentStatusInput } from './dto/update-assignment.dto';
 import { Assignment } from './models/assignment.model';
 import { Prisma } from '@prisma/client';
+import { ActivityLogsService } from '../activity-logs/activity-logs.service';
 
 @Injectable()
 export class SalespersonAssignmentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly activityLogsService: ActivityLogsService
+  ) {}
 
   private generateAssignmentCode(userId: number, locationId: number): string {
     const year = new Date().getFullYear() % 100;
@@ -55,86 +59,105 @@ export class SalespersonAssignmentsService {
     }
   }
 
-  async createAssignment(createAssignmentInput: CreateAssignmentInput, userId: number, roleId: number): Promise<Assignment> {
-    await this.validateSalesperson(createAssignmentInput.user_id);
+  async createAssignment(createAssignmentInput: CreateAssignmentInput, currentUser: any) {
+    const { user_id, location_id } = createAssignmentInput;
 
-    const existingAssignment = await this.prisma.salesperson_assignments.findFirst({
-      where: {
-        user_id: createAssignmentInput.user_id,
-        location_id: createAssignmentInput.location_id,
-        status: true
+    const [user, location] = await Promise.all([
+      this.prisma.users.findUnique({ where: { user_id } }),
+      this.prisma.locations.findUnique({ where: { location_id } })
+    ]);
+
+    const assignment = await this.prisma.salesperson_assignments.create({
+      data: {
+        user_id,
+        location_id,
+        assignment_code: `${user_id}-${location_id}`,
+      },
+      include: {
+        users: true,
+        locations: true
       }
     });
 
-    if (existingAssignment) {
-      throw new ForbiddenException('Salesperson already has an active assignment at this location');
-    }
+    await this.activityLogsService.createLog(currentUser.user_id, {
+      activity: `Created new assignment - ${user.name} assigned to ${location.location_name}`,
+      log_type: 'ASSIGNMENT'
+    });
 
-    if (roleId !== 1) {  // Not a super-admin
-      if (roleId === 2) {  // Manager
-        await this.validateManagerPermissions(userId, createAssignmentInput.location_id);
-      } else {
-        throw new ForbiddenException('Insufficient permissions');
-      }
-    }
-
-    return this.prisma.salesperson_assignments.create({
-      data: {
-        user_id: createAssignmentInput.user_id,
-        location_id: createAssignmentInput.location_id,
-        status: true,
-        assignment_code: await this.generateUniqueAssignmentCode(
-          createAssignmentInput.user_id,
-          createAssignmentInput.location_id
-        )
-      },
-      include: {
-        locations: true,
-        users: {
-          include: {
-            roles: true,
-            locations: true
-          }
-        }
-      }
-    }) as unknown as Assignment;
+    return assignment;
   }
 
-  async updateAssignmentStatus(
-    input: UpdateAssignmentStatusInput,
-    userId: number,
-    roleId: number
-  ): Promise<Assignment> {
+  async updateAssignmentStatus(assignmentId: number, active: boolean, currentUser: any) {
     const assignment = await this.prisma.salesperson_assignments.findUnique({
-      where: { assignment_id: input.assignment_id },
-      include: { locations: true }
+      where: { assignment_id: assignmentId },
+      include: { users: true, locations: true }
+    });
+
+    const updatedAssignment = await this.prisma.salesperson_assignments.update({
+      where: { assignment_id: assignmentId },
+      data: { status: active },
+      include: { users: true, locations: true }
+    });
+
+    await this.activityLogsService.createLog(currentUser.user_id, {
+      activity: `Updated assignment status - ${assignment.users.name} at ${assignment.locations.location_name} (${active ? 'activated' : 'deactivated'})`,
+      log_type: 'ASSIGNMENT'
+    });
+
+    return updatedAssignment;
+  }
+
+  async deleteAssignment(assignmentId: number, currentUser: any) {
+    const assignment = await this.prisma.salesperson_assignments.findUnique({
+      where: { assignment_id: assignmentId },
+      include: { users: true, locations: true }
+    });
+
+    await this.prisma.salesperson_assignments.delete({
+      where: { assignment_id: assignmentId }
+    });
+
+    await this.activityLogsService.createLog(currentUser.user_id, {
+      activity: `Removed assignment - ${assignment.users.name} from ${assignment.locations.location_name}`,
+      log_type: 'ASSIGNMENT'
+    });
+
+    return true;
+  }
+
+  async getAssignmentLogs(assignmentId: number, currentUser: any) {
+    const assignment = await this.prisma.salesperson_assignments.findUnique({
+      where: { assignment_id: assignmentId },
+      include: { users: true, locations: true }
     });
 
     if (!assignment) {
       throw new NotFoundException('Assignment not found');
     }
 
-    if (roleId !== 1) {  // Not a super-admin
-      if (roleId === 2) {  // Manager
-        await this.validateManagerPermissions(userId, assignment.location_id);
-      } else {
-        throw new ForbiddenException('Insufficient permissions');
-      }
+    // Role-based access control
+    switch(currentUser.role_name.toLowerCase()) {
+      case 'super-admin':
+        // Can see all logs
+        break;
+      case 'location-manager':
+        if (assignment.location_id !== currentUser.location_id) {
+          throw new ForbiddenException('Cannot access logs for assignments outside your location');
+        }
+        break;
+      case 'salesperson':
+        if (assignment.user_id !== currentUser.user_id) {
+          throw new ForbiddenException('Cannot access logs for other salespeople');
+        }
+        break;
+      default:
+        throw new ForbiddenException('Unauthorized');
     }
 
-    return this.prisma.salesperson_assignments.update({
-      where: { assignment_id: input.assignment_id },
-      data: { status: input.status },
-      include: {
-        locations: true,
-        users: {
-          include: {
-            roles: true,
-            locations: true
-          }
-        }
-      }
-    }) as unknown as Assignment;
+    return this.activityLogsService.getLogs({
+      log_type: 'ASSIGNMENT',
+      assignment_id: assignmentId
+    }, currentUser);
   }
 
   async transferAssignment(
