@@ -1,4 +1,5 @@
 import axios from "axios";
+import { LOGIN } from "@/graphql/queries";
 
 const API_URL = process.env.NEXT_PUBLIC_GRAPHQL_ENDPOINT;
 
@@ -52,28 +53,18 @@ export const registerUser = async (userData: RegisterUserData) => {
 };
 
 export const loginUser = async (email: string, password: string) => {
-  const query = `
-    mutation {
-      login(email: "${email}", password: "${password}") {
-         user {
-      user_id
-      name
-      email
-      role {
-        role_name
+  try {
+    const response = await axios.post(API_URL!, {
+      query: LOGIN,
+      variables: {
+        email,
+        password
       }
-      location {
-        location_name
-      }
-    }
-        access_token
-      }
-    }
-  `;
+    });
 
-  const response = await axios.post(API_URL, {
-    query,
-  });
-
-  return response.data.data.login; // Adjust based on your GraphQL response structure
+    return response.data.data.login;
+  } catch (error) {
+    console.error('Login error:', error);
+    throw error;
+  }
 };

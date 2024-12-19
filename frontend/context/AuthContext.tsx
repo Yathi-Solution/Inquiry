@@ -9,6 +9,14 @@ interface User {
   email: string;
   role_id: number;
   location_id: number;
+  roles: {
+    role_id: number;
+    role_name: string;
+  };
+  locations: {
+    location_id: number;
+    location_name: string;
+  };
 }
 
 interface AuthContextType {
@@ -43,13 +51,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const login = (userData: any) => {
+    console.log('Login data received:', userData);
     const userObj = {
       user_id: userData.user.user_id,
       name: userData.user.name,
       email: userData.user.email,
       role_id: userData.user.role_id,
       location_id: userData.user.location_id,
+      roles: userData.user.roles,
+      locations: userData.user.locations
     };
+    console.log('User object created:', userObj);
     setUser(userObj);
     setToken(userData.access_token);
     localStorage.setItem('user', JSON.stringify(userObj));
@@ -60,7 +72,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUser(null);
     setToken(null);
     localStorage.removeItem('token');
-    window.location.href = '/login';
+    localStorage.removeItem('user');
+    router.push('/login');
   };
 
   return (

@@ -17,6 +17,8 @@ import { format } from "date-fns";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Customer, FilterCustomersInput } from "@/graphql/queries";
+import { Button } from "@/components/ui/button";
+import { Plus } from "lucide-react";
 
 interface CustomersResponse {
   getCustomers: Customer[];
@@ -78,6 +80,13 @@ export default function CustomersPage() {
     <div className="container mx-auto py-10">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Customers</h1>
+        <Button 
+          onClick={() => router.push('/customers/create')}
+          className="flex items-center gap-2"
+        >
+          <Plus className="h-4 w-4" />
+          Add Customer
+        </Button>
       </div>
 
       <div className="rounded-md border">

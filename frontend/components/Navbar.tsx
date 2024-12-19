@@ -27,8 +27,6 @@ interface NavItem {
   label: string;
   isButton?: boolean;
   onClick?: () => void;
-  requiredRoles?: number[];
-  icon?: string;
 }
 
 export default function Navbar() {
@@ -51,25 +49,60 @@ export default function Navbar() {
     router.push('/login');
   };
 
-  const navItems = [
-    ...(user ? [
-      { href: "/dashboard", label: "Dashboard" },
-      { href: "/customers", label: "Customers" },
-      ...(user.role_id <= 2 ? [{ href: "/users", label: "Users" }] : []),
-      {
-        href: "#",
-        label: "Logout",
-        isButton: true,
-        onClick: handleLogout
-      }
-    ] : [
-      {
-        href: "/login",
-        label: "Login",
-        isButton: true
-      }
-    ])
-  ];
+  const getNavItems = () => {
+    // Not authenticated - show only login
+    if (!user) {
+      return [
+        {
+          href: "/login",
+          label: "Sign In",
+          isButton: true
+        }
+      ];
+    }
+
+    let items = [];
+
+    // Common items for all authenticated users
+    items.push({ href: "/profile", label: "Profile" });
+
+    // Role-specific items
+    switch (user.role_id) {
+      case ROLES.SUPER_ADMIN:
+        items.unshift(
+          { href: "/register", label: "Create User" },
+          { href: "/dashboard", label: "Dashboard" },
+          { href: "/customers", label: "Customers" }
+        );
+        break;
+      
+      case ROLES.LOCATION_MANAGER:
+        items.unshift(
+          { href: "/register", label: "Create User" },
+          { href: "/dashboard", label: "Dashboard" },
+          { href: "/customers", label: "Customers" }
+        );
+        break;
+      
+      case ROLES.SALESPERSON:
+        items.unshift(
+          { href: "/customers", label: "Customers" }
+        );
+        break;
+    }
+
+    // Add logout for all authenticated users
+    items.push({
+      href: "#",
+      label: "Logout",
+      isButton: true,
+      onClick: handleLogout
+    });
+
+    return items;
+  };
+
+  const navItems = getNavItems();
 
   const toggleTheme = () => {
     setTheme(theme === 'dark' ? 'light' : 'dark');
@@ -104,11 +137,11 @@ export default function Navbar() {
                   key={item.href} 
                   variant="default" 
                   size="sm"
-                  onClick={item.onClick}
-                  asChild={!item.onClick}
+                  onClick={(item as { onClick?: () => void }).onClick}
+                  asChild={!(item as { onClick?: () => void }).onClick}
                 >
-                  {item.onClick ? (
-                    <div onClick={item.onClick}>{item.label}</div>
+                  {(item as { onClick?: () => void }).onClick ? (
+                    item.label
                   ) : (
                     <Link href={item.href}>{item.label}</Link>
                   )}
@@ -168,10 +201,10 @@ export default function Navbar() {
                       key={item.href} 
                       variant="default" 
                       size="sm"
-                      onClick={item.onClick}
-                      asChild={!item.onClick}
+                      onClick={(item as { onClick?: () => void }).onClick}
+                      asChild={!(item as { onClick?: () => void }).onClick}
                     >
-                      {item.onClick ? (
+                      {(item as { onClick?: () => void }).onClick ? (
                         item.label
                       ) : (
                         <Link href={item.href}>{item.label}</Link>

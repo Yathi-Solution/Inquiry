@@ -8,6 +8,7 @@ import { request } from 'graphql-request';
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { Home } from "lucide-react";
 import {
   Form,
   FormControl,
@@ -43,6 +44,8 @@ export default function LoginPage() {
       setIsLoading(true);
       setError(null);
 
+      console.log('Attempting login with:', values);
+
       const response = await request<any>(
         process.env.NEXT_PUBLIC_GRAPHQL_ENDPOINT!,
         LOGIN,
@@ -52,9 +55,19 @@ export default function LoginPage() {
         }
       );
 
+      console.log('Login response:', response);
+
       if (response.login?.access_token) {
-        login(response.login);
-        router.push("/dashboard");
+        await login(response.login);
+        
+        // Redirect based on role
+        if (response.login.user.role_id === 3) { // Salesperson
+          router.push('/customers/create');
+        } else {
+          router.push('/dashboard');
+        }
+      } else {
+        setError('Invalid login response');
       }
     } catch (error: any) {
       console.error("Login error:", error);
@@ -65,7 +78,16 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center">
+    <div className="flex min-h-screen items-center justify-center relative">
+      <Button
+        variant="ghost"
+        size="icon"
+        className="absolute top-4 left-4"
+        onClick={() => router.push('/')}
+      >
+        <Home className="h-5 w-5" />
+      </Button>
+
       <div className="w-full max-w-md space-y-8 p-8 bg-white rounded-lg shadow-lg">
         <div className="text-center">
           <h2 className="text-2xl font-bold">Sign in to your account</h2>

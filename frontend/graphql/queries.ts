@@ -129,11 +129,11 @@ export const UPDATE_USER = gql`
       user_id
       name
       email
-      role {
+      roles {
         role_id
         role_name
       }
-      location {
+      locations {
         location_id
         location_name
       }
@@ -249,8 +249,8 @@ export const GET_ASSIGNMENT_LOGS = gql`
 `;
 
 export const CREATE_CUSTOMER = gql`
-  mutation CreateCustomer($input: CreateCustomerInput!) {
-    createCustomer(input: $input) {
+  mutation CreateCustomer($createCustomerInput: CreateCustomerInput!) {
+    createCustomer(createCustomerInput: $createCustomerInput) {
       customer_id
       name
       email
@@ -336,3 +336,14 @@ export const GET_CUSTOMERS = gql`
     }
   }
 `;
+
+export const GET_SALESPEOPLE = `
+  query GetSalespeople {
+    salespeople {
+      user_id
+      name
+      location_id
+    }
+  }
+`;
+
