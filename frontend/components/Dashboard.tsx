@@ -399,75 +399,79 @@ export default function Dashboard() {
           size="sm"
           onClick={handleBulkDelete}
           disabled={table.getFilteredSelectedRowModel().rows.length === 0}
+          className="w-full sm:w-auto"
         >
           <Trash2 className="h-4 w-4 mr-2" />
           Delete Selected
         </Button>
       </div>
 
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto">
           <Input
             placeholder="Search by name..."
             value={nameFilter}
             onChange={(e) => setNameFilter(e.target.value)}
-            className="max-w-sm"
+            className="w-full sm:w-[200px]"
           />
 
-          <Select
-            value={roleFilter}
-            onValueChange={(value) => {
-              console.log('Selected role:', value);
-              setRoleFilter(value);
-            }}
-          >
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Select role" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Roles</SelectItem>
-              {uniqueRoles.map((role) => (
-                <SelectItem 
-                  key={`filter-role-${role.role_id}`}
-                  value={role.role_id.toString()}
-                >
-                  {role.role_name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 w-full sm:w-auto">
+            <Select
+              value={roleFilter}
+              onValueChange={(value) => {
+                console.log('Selected role:', value);
+                setRoleFilter(value);
+              }}
+            >
+              <SelectTrigger className="w-full sm:w-[180px]">
+                <SelectValue placeholder="Select role" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Roles</SelectItem>
+                {uniqueRoles.map((role) => (
+                  <SelectItem 
+                    key={`filter-role-${role.role_id}`}
+                    value={role.role_id.toString()}
+                  >
+                    {role.role_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-          <Select
-            value={locationFilter}
-            onValueChange={(value) => {
-              console.log('Selected location:', value);
-              setLocationFilter(value);
-            }}
-          >
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Select location" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Locations</SelectItem>
-              {uniqueLocations.map((location) => (
-                <SelectItem 
-                  key={`filter-location-${location.location_id}`}
-                  value={location.location_id.toString()}
-                >
-                  {location.location_name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            <Select
+              value={locationFilter}
+              onValueChange={(value) => {
+                console.log('Selected location:', value);
+                setLocationFilter(value);
+              }}
+            >
+              <SelectTrigger className="w-full sm:w-[180px]">
+                <SelectValue placeholder="Select location" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Locations</SelectItem>
+                {uniqueLocations.map((location) => (
+                  <SelectItem 
+                    key={`filter-location-${location.location_id}`}
+                    value={location.location_id.toString()}
+                  >
+                    {location.location_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
           <Button
             variant="outline"
             size="sm"
             onClick={() => queryClient.invalidateQueries({ queryKey: ['users'] })}
+            className="w-full sm:w-auto"
           >
-            <RefreshCw className="h-4 w-4" />
+            <RefreshCw className="h-4 w-4 mr-2" />
             Refresh
           </Button>
 
@@ -475,19 +479,20 @@ export default function Dashboard() {
             variant="outline"
             size="sm"
             onClick={resetFilters}
+            className="w-full sm:w-auto"
           >
             Reset Filters
           </Button>
         </div>
       </div>
 
-      <div className="rounded-md border">
+      <div className="overflow-x-auto rounded-md border">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
-                  <TableHead key={header.id}>
+                  <TableHead key={header.id} className="whitespace-nowrap">
                     {flexRender(
                       header.column.columnDef.header,
                       header.getContext()
@@ -505,7 +510,7 @@ export default function Dashboard() {
                   data-state={row.getIsSelected() && "selected"}
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
+                    <TableCell key={cell.id} className="whitespace-nowrap">
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </TableCell>
                   ))}
@@ -525,17 +530,18 @@ export default function Dashboard() {
         </Table>
       </div>
 
-      <div className="flex items-center justify-between py-4">
-        <div className="flex-1 text-sm text-muted-foreground">
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 py-4">
+        <div className="flex-1 text-sm text-muted-foreground text-center sm:text-left">
           {table.getFilteredSelectedRowModel().rows.length} of{" "}
           {table.getFilteredRowModel().rows.length} row(s) selected.
         </div>
-        <div className="space-x-2">
+        <div className="flex gap-2">
           <Button
             variant="outline"
             size="sm"
             onClick={() => table.previousPage()}
             disabled={!table.getCanPreviousPage()}
+            className="w-24"
           >
             Previous
           </Button>
@@ -544,6 +550,7 @@ export default function Dashboard() {
             size="sm"
             onClick={() => table.nextPage()}
             disabled={!table.getCanNextPage()}
+            className="w-24"
           >
             Next
           </Button>
@@ -551,7 +558,7 @@ export default function Dashboard() {
       </div>
 
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-        <SheetContent side="right">
+        <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
           <SheetHeader>
             <SheetTitle>Edit User</SheetTitle>
           </SheetHeader>
@@ -639,13 +646,14 @@ export default function Dashboard() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex justify-end gap-2 pt-4">
+              <div className="flex flex-col sm:flex-row justify-end gap-2 pt-4">
                 <Button 
                   variant="outline" 
                   onClick={() => {
                     setEditingUser(null);
                     setSheetOpen(false);
                   }}
+                  className="w-full sm:w-auto"
                 >
                   Cancel
                 </Button>
@@ -655,6 +663,7 @@ export default function Dashboard() {
                     setSheetOpen(false);
                   }}
                   disabled={isUpdating}
+                  className="w-full sm:w-auto"
                 >
                   {isUpdating ? 'Saving...' : 'Save Changes'}
                 </Button>
