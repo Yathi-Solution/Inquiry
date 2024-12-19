@@ -2,12 +2,12 @@ import { gql } from 'graphql-request';
 
 // Define TypeScript interfaces for GraphQL query/mutation inputs and outputs
 export interface User {
-  user_id: string;
+  user_id: number;
   name: string;
   email: string;
-  role_id: string;
-  location_id: string;
-  role_name: string;
+  role_id: number;
+  location_id: number;
+  role_name?: string;
   roles?: {
     role_name: string;
   };

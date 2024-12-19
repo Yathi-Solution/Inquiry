@@ -12,11 +12,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { GET_CUSTOMERS, GET_ALL_USERS, UPDATE_CUSTOMER, GET_ALL_LOCATIONS } from "@/graphql/queries";
+import { GET_CUSTOMERS, GET_ALL_USERS, UPDATE_CUSTOMER, GET_ALL_LOCATIONS, GET_SALESPEOPLE_BY_LOCATION } from "@/graphql/queries";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
-import { Customer, FilterCustomersInput } from "@/graphql/queries";
+import { Customer, FilterCustomersInput, User, Location } from "@/graphql/queries";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import {
@@ -44,7 +44,6 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Pencil } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { Location } from "@/graphql/queries";
 
 interface CustomersResponse {
   getCustomers: Customer[];
@@ -70,7 +69,7 @@ interface CustomerDetails {
   status: string;
   notes?: string;
   created_at: Date | string;
-  salesperson_id: number;
+  salesperson_id: number | null;
   location_id: number;
 }
 
@@ -78,6 +77,25 @@ interface LocationsResponse {
   locations: {
     location_id: number;
     location_name: string;
+  }[];
+}
+
+interface EditCustomerFieldsProps {
+  editingCustomer: CustomerDetails;
+  setEditingCustomer: React.Dispatch<React.SetStateAction<CustomerDetails | null>>;
+  user: User;
+  locations: Location[];
+  salespeople: Salesperson[];
+  selectedLocation: number | null;
+  setSelectedLocation: (id: number) => void;
+}
+
+interface SalespeopleResponse {
+  getSalespeopleByLocation: {
+    user_id: number;
+    name: string;
+    role_id: number;
+    location_id: number;
   }[];
 }
 
@@ -91,6 +109,7 @@ export default function CustomersPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<CustomerDetails | null>(null);
   const [locations, setLocations] = useState<Location[]>([]);
+  const [selectedLocation, setSelectedLocation] = useState<number | null>(null);
 
   useEffect(() => {
     const savedToken = localStorage.getItem('token');
@@ -163,7 +182,8 @@ export default function CustomersPage() {
     fetchData();
   }, [token, user]);
 
-  const getSalespersonName = (salesperson_id: number) => {
+  const getSalespersonName = (salesperson_id: number | null) => {
+    if (!salesperson_id) return '-';
     const salesperson = salespeople.find(sp => sp.user_id === salesperson_id);
     return salesperson?.name || '-';
   };
@@ -200,6 +220,237 @@ export default function CustomersPage() {
       console.error('Error updating customer:', error);
       toast.error("Failed to update customer");
     }
+  };
+
+  const EditCustomerFields = ({ 
+    editingCustomer, 
+    setEditingCustomer, 
+    user,
+    locations,
+    salespeople,
+    selectedLocation,
+    setSelectedLocation 
+  }: EditCustomerFieldsProps) => {
+    const [availableSalespeople, setAvailableSalespeople] = useState<Salesperson[]>([]);
+
+    useEffect(() => {
+      const fetchSalespeopleForLocation = async () => {
+        if (!selectedLocation || !token) return;
+        
+        try {
+          const filteredSalespeople = salespeople.filter(
+            sp => sp.location_id === selectedLocation && sp.role_id === 3
+          );
+          setAvailableSalespeople(filteredSalespeople);
+        } catch (error) {
+          console.error('Error filtering salespeople:', error);
+        }
+      };
+
+      if (user.roles?.role_name.toLowerCase() === 'super-admin' && selectedLocation) {
+        fetchSalespeopleForLocation();
+      }
+    }, [selectedLocation, salespeople]);
+
+    const commonFields = (
+      <>
+        <div className="space-y-2">
+          <label>Name</label>
+          <Input
+            value={editingCustomer.name}
+            onChange={(e) => 
+              setEditingCustomer(prev => prev ? {
+                ...prev,
+                name: e.target.value
+              } : null)
+            }
+          />
+        </div>
+        <div className="space-y-2">
+          <label>Email</label>
+          <Input
+            value={editingCustomer.email}
+            onChange={(e) => 
+              setEditingCustomer(prev => prev ? {
+                ...prev,
+                email: e.target.value
+              } : null)
+            }
+          />
+        </div>
+        <div className="space-y-2">
+          <label>Phone</label>
+          <Input
+            value={editingCustomer.phone}
+            onChange={(e) => 
+              setEditingCustomer(prev => prev ? {
+                ...prev,
+                phone: e.target.value
+              } : null)
+            }
+          />
+        </div>
+        <div className="space-y-2">
+          <label>Visit Date</label>
+          <Input
+            type="date"
+            value={format(new Date(editingCustomer.visit_date), 'yyyy-MM-dd')}
+            onChange={(e) => 
+              setEditingCustomer(prev => prev ? {
+                ...prev,
+                visit_date: new Date(e.target.value)
+              } : null)
+            }
+          />
+        </div>
+        <div className="space-y-2">
+          <label>Status</label>
+          <Select
+            value={editingCustomer.status}
+            onValueChange={(value) => 
+              setEditingCustomer(prev => prev ? {
+                ...prev,
+                status: value
+              } : null)
+            }
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="pending">Pending</SelectItem>
+              <SelectItem value="ongoing">Ongoing</SelectItem>
+              <SelectItem value="completed">Completed</SelectItem>
+              <SelectItem value="cancelled">Cancelled</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <label>Notes</label>
+          <Textarea
+            value={editingCustomer.notes}
+            onChange={(e) => 
+              setEditingCustomer(prev => prev ? {
+                ...prev,
+                notes: e.target.value
+              } : null)
+            }
+          />
+        </div>
+      </>
+    );
+
+    const renderRoleSpecificFields = () => {
+      switch (user.roles?.role_name.toLowerCase()) {
+        case 'super-admin':
+          return (
+            <>
+              <div className="space-y-2">
+                <label>Location</label>
+                <Select
+                  value={selectedLocation?.toString()}
+                  onValueChange={(value) => {
+                    const locationId = parseInt(value);
+                    setSelectedLocation(locationId);
+                    setEditingCustomer(prev => prev ? {
+                      ...prev,
+                      location_id: locationId,
+                      salesperson_id: null
+                    } : null);
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select location" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {locations.map((loc) => (
+                      <SelectItem 
+                        key={loc.location_id} 
+                        value={loc.location_id.toString()}
+                      >
+                        {loc.location_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {selectedLocation && availableSalespeople.length > 0 && (
+                <div className="space-y-2">
+                  <label>Salesperson</label>
+                  <Select
+                    value={editingCustomer.salesperson_id?.toString()}
+                    onValueChange={(value) => 
+                      setEditingCustomer(prev => prev ? {
+                        ...prev,
+                        salesperson_id: parseInt(value)
+                      } : null)
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select salesperson" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableSalespeople.map((sp) => (
+                        <SelectItem 
+                          key={sp.user_id} 
+                          value={sp.user_id.toString()}
+                        >
+                          {sp.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </>
+          );
+
+        case 'location-manager':
+          return (
+            <div className="space-y-2">
+              <label>Salesperson</label>
+              <Select
+                value={editingCustomer.salesperson_id?.toString()}
+                onValueChange={(value) => 
+                  setEditingCustomer(prev => prev ? {
+                    ...prev,
+                    salesperson_id: parseInt(value)
+                  } : null)
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select salesperson" />
+                </SelectTrigger>
+                <SelectContent>
+                  {salespeople
+                    .filter(sp => sp.location_id === user.location_id)
+                    .map((sp) => (
+                      <SelectItem 
+                        key={sp.user_id} 
+                        value={sp.user_id.toString()}
+                      >
+                        {sp.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+          );
+
+        case 'salesperson':
+          return null; // Salesperson can't change location or salesperson
+
+        default:
+          return null;
+      }
+    };
+
+    return (
+      <div className="space-y-4">
+        {commonFields}
+        {renderRoleSpecificFields()}
+      </div>
+    );
   };
 
   if (!token || !user) return null;
@@ -323,90 +574,21 @@ export default function CustomersPage() {
             <SheetTitle>Edit Customer</SheetTitle>
           </SheetHeader>
           {editingCustomer && (
-            <div className="space-y-4 mt-4">
-              <div className="space-y-2">
-                <label>Name</label>
-                <Input
-                  value={editingCustomer.name}
-                  onChange={(e) => 
-                    setEditingCustomer(prev => prev ? {
-                      ...prev,
-                      name: e.target.value
-                    } : null)
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <label>Email</label>
-                <Input
-                  value={editingCustomer.email}
-                  onChange={(e) => 
-                    setEditingCustomer(prev => prev ? {
-                      ...prev,
-                      email: e.target.value
-                    } : null)
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <label>Phone</label>
-                <Input
-                  value={editingCustomer.phone}
-                  onChange={(e) => 
-                    setEditingCustomer(prev => prev ? {
-                      ...prev,
-                      phone: e.target.value
-                    } : null)
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <label>Visit Date</label>
-                <Input
-                  type="date"
-                  value={format(new Date(editingCustomer.visit_date), 'yyyy-MM-dd')}
-                  onChange={(e) => 
-                    setEditingCustomer(prev => prev ? {
-                      ...prev,
-                      visit_date: new Date(e.target.value)
-                    } : null)
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <label>Status</label>
-                <Select
-                  value={editingCustomer.status}
-                  onValueChange={(value) => 
-                    setEditingCustomer(prev => prev ? {
-                      ...prev,
-                      status: value
-                    } : null)
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="ongoing">Ongoing</SelectItem>
-                    <SelectItem value="completed">Completed</SelectItem>
-                    <SelectItem value="cancelled">Cancelled</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <label>Notes</label>
-                <Textarea
-                  value={editingCustomer.notes}
-                  onChange={(e) => 
-                    setEditingCustomer(prev => prev ? {
-                      ...prev,
-                      notes: e.target.value
-                    } : null)
-                  }
-                />
-              </div>
+            <div className="space-y-4 mt-4 max-h-[80vh] overflow-y-auto pr-6">
+              <EditCustomerFields 
+                editingCustomer={editingCustomer}
+                setEditingCustomer={setEditingCustomer}
+                user={user}
+                locations={locations}
+                salespeople={salespeople}
+                selectedLocation={editingCustomer.location_id}
+                setSelectedLocation={(id) => 
+                  setEditingCustomer(prev => prev ? {
+                    ...prev,
+                    location_id: id
+                  } : null)
+                }
+              />
               <div className="flex justify-end gap-2 pt-4">
                 <Button 
                   variant="outline" 
@@ -417,9 +599,7 @@ export default function CustomersPage() {
                 >
                   Cancel
                 </Button>
-                <Button 
-                  onClick={handleUpdateCustomer}
-                >
+                <Button onClick={handleUpdateCustomer}>
                   Save Changes
                 </Button>
               </div>
