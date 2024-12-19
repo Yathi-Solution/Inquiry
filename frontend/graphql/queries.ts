@@ -303,6 +303,12 @@ export interface Customer {
   notes?: string;
   created_at: Date;
   updated_at: Date;
+  users?: {
+    name: string;
+  };
+  locations?: {
+    location_name: string;
+  };
 }
 
 export interface FilterCustomersInput {
@@ -337,12 +343,67 @@ export const GET_CUSTOMERS = gql`
   }
 `;
 
-export const GET_SALESPEOPLE = `
+export const GET_SALESPEOPLE = gql`
   query GetSalespeople {
     salespeople {
       user_id
       name
       location_id
+    }
+  }
+`;
+
+export interface UpdateCustomerInput {
+  name?: string;
+  phone?: string;
+  visit_date?: Date;
+  status?: string;
+  notes?: string;
+}
+
+export const UPDATE_CUSTOMER = gql`
+  mutation UpdateCustomer($customerId: Int!, $updateData: UpdateCustomerInput!) {
+    updateCustomer(customerId: $customerId, updateData: $updateData) {
+      customer_id
+      name
+      email
+      phone
+      location_id
+      salesperson_id
+      visit_date
+      status
+      notes
+      created_at
+      updated_at
+      users {
+        name
+      }
+      locations {
+        location_name
+      }
+    }
+  }
+`;
+
+// Get salespeople by location
+export const GET_SALESPEOPLE_BY_LOCATION = gql`
+  query GetSalespeopleByLocation($location_id: Int!) {
+    getSalespeopleByLocation(location_id: $location_id) {
+      user_id
+      name
+      role_id
+      location_id
+    }
+  }
+`;
+
+// Get location salespeople (for location manager)
+export const GET_LOCATION_SALESPEOPLE = gql`
+  query GetLocationSalespeople($location_id: Int!) {
+    getSalespeopleByLocation(location_id: $location_id) {
+      user_id
+      name
+      role_id
     }
   }
 `;

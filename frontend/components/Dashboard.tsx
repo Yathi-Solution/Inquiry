@@ -108,7 +108,8 @@ export default function Dashboard() {
   const [sheetOpen, setSheetOpen] = useState(false);
 
   useEffect(() => {
-    if (!token) {
+    const savedToken = localStorage.getItem('token');
+    if (!savedToken && !token) {
       router.push('/login');
     }
   }, [token, router]);

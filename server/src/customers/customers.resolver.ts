@@ -149,9 +149,27 @@ export class CustomersResolver {
   async updateCustomer(
     @Args('customerId', { type: () => Int }) customerId: number,
     @Args('updateData') updateData: UpdateCustomerInput,
-    @CurrentUser() currentUser: any
+    @Context() context: any
   ) {
-    return this.customersService.updateCustomer(customerId, updateData, currentUser);
+    const user = context.req.user;
+    if (!user) {
+      throw new GraphQLError('User not authenticated');
+    }
+
+    // Fetch user with role information if needed
+    if (!user.role_name) {
+      const userWithRole = await this.prisma.users.findUnique({
+        where: { user_id: user.user_id },
+        include: { roles: true }
+      });
+
+      if (!userWithRole) {
+        throw new GraphQLError('User not found');
+      }
+      user.role_name = userWithRole.roles.role_name;
+    }
+
+    return this.customersService.updateCustomer(customerId, updateData, user);
   }
 
   @Mutation(() => CustomerDto)

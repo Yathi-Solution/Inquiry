@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 
 interface User {
   user_id: number;
@@ -35,20 +35,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
     const savedUser = localStorage.getItem('user');
     const savedToken = localStorage.getItem('token');
     
-    if (savedUser) {
+    if (savedUser && savedToken) {
       setUser(JSON.parse(savedUser));
-    }
-    if (savedToken) {
       setToken(savedToken);
+    } else if (!pathname.includes('/login')) {
+      router.push('/login');
     }
     
     setIsLoading(false);
-  }, []);
+  }, [pathname]);
 
   const login = (userData: any) => {
     console.log('Login data received:', userData);

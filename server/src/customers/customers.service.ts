@@ -5,6 +5,7 @@ import { Prisma, customers } from '@prisma/client';
 import { CreateCustomerInput } from './dto/create-customer.dto';
 import { FilterCustomersInput } from './dto/filter-customers.dto';
 import { ActivityLogsService } from '../activity-logs/activity-logs.service';
+import { UpdateCustomerInput } from './dto/update-customer.dto';
 
 @Injectable()
 export class CustomersService {
@@ -343,38 +344,62 @@ export class CustomersService {
     }, user);
   }
 
-  async updateCustomer(customerId: number, updateData: any, user: any) {
-    const oldCustomer = await this.prisma.customers.findUnique({
+  async updateCustomer(
+    customerId: number,
+    updateData: UpdateCustomerInput,
+    user: any
+  ) {
+    // First verify the customer exists
+    const existingCustomer = await this.prisma.customers.findUnique({
       where: { customer_id: customerId },
       include: { users: true, locations: true }
     });
 
-    // Role-based validation (reusing existing logic)
-    this.validateUserAccess(user, oldCustomer);
+    if (!existingCustomer) {
+      throw new NotFoundException(`Customer with ID ${customerId} not found`);
+    }
 
+    // Role-based validation
+    switch(user.role_name.toLowerCase()) {
+      case 'salesperson':
+        if (existingCustomer.salesperson_id !== user.user_id) {
+          throw new ForbiddenException('You can only update your own customers');
+        }
+        break;
+      case 'location-manager':
+        if (existingCustomer.location_id !== user.location_id) {
+          throw new ForbiddenException('You can only update customers in your location');
+        }
+        break;
+      case 'super-admin':
+        break;
+      default:
+        throw new ForbiddenException('Unauthorized');
+    }
+
+    // Update the existing customer record
     const updatedCustomer = await this.prisma.customers.update({
-      where: { customer_id: customerId },
-      data: updateData,
-      include: { users: true, locations: true }
+      where: { 
+        customer_id: customerId // This ensures we update the existing record
+      },
+      data: {
+        name: updateData.name || existingCustomer.name,
+        phone: updateData.phone || existingCustomer.phone,
+        status: updateData.status || existingCustomer.status,
+        notes: updateData.notes || existingCustomer.notes,
+        visit_date: updateData.visit_date || existingCustomer.visit_date,
+        location_id: updateData.location_id || existingCustomer.location_id,
+        salesperson_id: updateData.salesperson_id || existingCustomer.salesperson_id,
+        updated_at: new Date()
+      },
+      include: { 
+        users: true, 
+        locations: true 
+      }
     });
-
-    // Log specific changes
-    const changes = [];
-    if (updateData.visit_date && updateData.visit_date !== oldCustomer.visit_date) {
-      changes.push(`visit date to ${new Date(updateData.visit_date).toLocaleDateString()}`);
-    }
-    if (updateData.salesperson_id && updateData.salesperson_id !== oldCustomer.salesperson_id) {
-      changes.push(`assigned salesperson from ${oldCustomer.users.name} to ${updatedCustomer.users.name}`);
-    }
-    if (updateData.notes && updateData.notes !== oldCustomer.notes) {
-      changes.push('notes');
-    }
-    if (updateData.phone && updateData.phone !== oldCustomer.phone) {
-      changes.push('contact information');
-    }
 
     await this.activityLogsService.createLog(user.user_id, {
-      activity: `Updated customer ${oldCustomer.name}: ${changes.join(', ')}`,
+      activity: `Updated customer ${existingCustomer.name}`,
       log_type: 'CUSTOMER'
     });
 

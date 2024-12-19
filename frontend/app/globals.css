@@ -70,3 +70,11 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+.drawer-backdrop {
+  background-color: transparent !important;
+}
+
+[data-overlay] {
+  background-color: transparent !important;
+}
