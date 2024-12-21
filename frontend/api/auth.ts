@@ -1,5 +1,5 @@
 import axios from "axios";
-import { LOGIN } from "@/graphql/queries";
+import { LOGIN, CREATE_USER } from "@/graphql/queries";
 
 const API_URL = process.env.NEXT_PUBLIC_GRAPHQL_ENDPOINT;
 
@@ -19,31 +19,12 @@ interface RegisterUserData {
 
 export const registerUser = async (userData: RegisterUserData) => {
   try {
-    const mutation = `
-      mutation CreateUser($createUserInput: CreateUserInput!) {
-        createUser(createUserInput: $createUserInput) {
-          user_id
-          name
-          email
-          role {
-            role_name
-          }
-          location {
-            location_name
-          }
-        }
+    const response = await axios.post(API_URL!, {
+      query: CREATE_USER,
+      variables: {
+        createUserInput: userData
       }
-    `;
-
-    const response = await axios.post(
-      process.env.NEXT_PUBLIC_GRAPHQL_ENDPOINT!,
-      {
-        query: mutation,
-        variables: {
-          createUserInput: userData
-        }
-      }
-    );
+    });
 
     return response.data.data.createUser;
   } catch (error) {

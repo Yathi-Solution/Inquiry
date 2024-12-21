@@ -3,17 +3,18 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model activity_logs {
+  user_id     Int
+  activity    String
+  created_at  DateTime @default(now())
   activity_id Int      @id @default(autoincrement())
-  user_id    Int
-  activity   String
-  log_type   String
-  created_at DateTime @default(now())
-  users      users    @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+  log_type    String
+  users       users    @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
 
   @@index([user_id])
   @@index([log_type])
@@ -22,7 +23,7 @@ model activity_logs {
 model customers {
   customer_id    Int       @id @default(autoincrement())
   name           String
-  email          String    @unique
+  email          String?   @unique
   phone          String
   location_id    Int
   salesperson_id Int
@@ -50,13 +51,13 @@ model roles {
 }
 
 model salesperson_assignments {
-  assignment_id Int       @id @default(autoincrement())
-  assignment_code  String
-  user_id       Int
-  location_id   Int
-  status        Boolean   @default(true)
-  locations     locations @relation(fields: [location_id], references: [location_id])
-  users         users     @relation(fields: [user_id], references: [user_id])
+  assignment_id   Int       @id @default(autoincrement())
+  user_id         Int
+  location_id     Int
+  status          Boolean   @default(true)
+  assignment_code String
+  locations       locations @relation(fields: [location_id], references: [location_id])
+  users           users     @relation(fields: [user_id], references: [user_id])
 }
 
 model users {

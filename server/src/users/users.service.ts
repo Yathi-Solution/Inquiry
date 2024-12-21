@@ -42,21 +42,29 @@ export class UsersService {
     return user;
   }
 
-  async createUser(createUserInput: CreateUserInput, currentUser: any) {
-    const user = await this.prisma.users.create({
-      data: {
-        ...createUserInput,
-        password: await bcrypt.hash(createUserInput.password, 10),
-      },
-      include: { roles: true, locations: true },
-    });
+  async createUser(createUserInput: CreateUserInput, currentUser?: any) {
+    const { password, ...userData } = createUserInput;
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-    await this.activityLogsService.createLog(currentUser.user_id, {
-      activity: `Created new user - ${user.email}`,
-      log_type: 'USER_MGMT'
-    });
+    try {
+      const user = await this.prisma.users.create({
+        data: {
+          ...userData,
+          password: hashedPassword,
+        },
+        include: {
+          roles: true,
+          locations: true,
+        },
+      });
 
-    return user;
+      return user;
+    } catch (error) {
+      if (error.code === 'P2002') {
+        throw new Error('User with this email already exists');
+      }
+      throw error;
+    }
   }
 
   async updateUser(updateUserInput: UpdateUserInput, currentUser: any) {

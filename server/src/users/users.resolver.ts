@@ -40,8 +40,8 @@ export class UsersResolver {
   // @UseGuards(JwtAuthGuard, RolesGuard)
   // @Roles('super-admin', 'location-manager')
   @Mutation(() => User)
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(1, 2)
+  // @UseGuards(JwtAuthGuard, RolesGuard)
+  // @Roles(1, 2)
   async createUser(
     @Args('createUserInput') createUserInput: CreateUserInput,
     @CurrentUser() currentUser: any

@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "index.js",
+      "use": "@vercel/node@3.2.29",
+      "config": {"includeFiles":["prisma/schema.prisma"]}
+    }
+  ],
+  "routes": [
+    {
+      "src": "/graphql",
+      "dest": "/"
+    }
+  ]
+}

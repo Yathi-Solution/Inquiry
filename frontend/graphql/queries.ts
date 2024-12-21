@@ -42,7 +42,21 @@ export interface LoginInput {
 
 export interface LoginResponse {
   access_token: string;
-  user: User;
+  user: {
+    user_id: number;
+    name: string;
+    email: string;
+    location_id: number;
+    role_id: number;
+    roles: {
+      role_id: number;
+      role_name: string;
+    };
+    locations: {
+      location_id: number;
+      location_name: string;
+    };
+  };
 }
 
 // Add Activity Log related interfaces
